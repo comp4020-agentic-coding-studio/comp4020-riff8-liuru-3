@@ -6,5 +6,8 @@ export default defineConfig({
   test: {
     include: ["spec/**/*.test.ts"],
     globalSetup: ["./spec/global-setup.ts"],
+    // game tests play real (shortened) rounds against their own servers
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
   },
 });

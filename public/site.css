@@ -1,0 +1,140 @@
+/* Shared by every page: the paper palette and reading layout. The palette
+   stays light on a dark OS theme on purpose: it's a paper scroll, and
+   inverting it would invert the artwork. */
+:root {
+  color-scheme: light;
+  --paper: #f3ebdd;
+  --paper-deep: #e9dfcc;
+  --ink: #292b29;
+  --ink-mid: #4e524c;
+  --mist: #b9bcae;
+  --green: #788c7a;
+  --blue: #778c99;
+  --cinnabar: #a44d3c;
+  --focus: #1f5f8b;
+  --serif: "Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", "STSong", "SimSun", serif;
+  --sans: "Noto Sans CJK SC", "Source Han Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  line-height: 1.6;
+}
+
+a { color: #3f5b6b; }
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+button {
+  font: inherit;
+  color: var(--ink);
+  background: #f8f2e6;
+  border: 1px solid #8d8a7e;
+  border-radius: 4px;
+  min-height: 44px;
+  padding: 0.3rem 0.8rem;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) { background: #fffaf0; border-color: var(--ink); }
+button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.quiet { color: var(--ink-mid); font-size: 0.9rem; }
+
+.page-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 1.2rem;
+  border-bottom: 1px solid #d8ccb6;
+}
+
+.brand {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 1.1rem;
+  text-decoration: none;
+}
+
+.page-bar nav { display: flex; flex-wrap: wrap; gap: 0.2rem 1rem; }
+
+.page-bar nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--ink);
+}
+
+.prose {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.2rem 4rem;
+}
+
+.prose h1, .prose h2, .prose h3 { font-family: var(--serif); line-height: 1.3; }
+.prose h1 .en { display: block; font-size: 1rem; font-family: var(--sans); color: var(--ink-mid); font-weight: normal; }
+.prose code { background: var(--paper-deep); padding: 0 0.25em; border-radius: 3px; }
+.prose pre { background: var(--paper-deep); padding: 0.8rem; overflow-x: auto; }
+.prose table { border-collapse: collapse; display: block; overflow-x: auto; }
+.prose th, .prose td { border: 1px solid #d0c4ae; padding: 0.3rem 0.5rem; text-align: left; }
+.prose dt { font-weight: bold; margin-top: 0.8rem; }
+.prose dd { margin-left: 1rem; }
+
+body.page:has(.dream-grid) .prose,
+body.page:has(.archive-view) .prose { max-width: 90rem; }
+
+.dream-grid {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+  gap: 1.5rem;
+}
+
+.dream-card a { display: grid; gap: 0.2rem; color: var(--ink); text-decoration: none; }
+.dream-card .scene { width: 100%; height: auto; border: 1px solid #d8ccb6; }
+.dream-title { font-family: var(--serif); font-size: 1.1rem; }
+.dream-en, .dream-meta { color: var(--ink-mid); font-size: 0.9rem; }
+
+.mark {
+  display: inline-grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  background: var(--mark);
+  color: #fbf6ec;
+  font-family: var(--serif);
+  font-size: 0.85rem;
+  margin-right: 0.15rem;
+}
+
+.archive-view { overflow-x: auto; border: 1px solid #d8ccb6; }
+.archive-view .scene { display: block; height: min(70vh, 640px); width: auto; aspect-ratio: 8 / 3; }
+.archive-view.fit .scene { width: 100%; height: auto; }
+.replay { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.8rem; }
+.pager { display: flex; gap: 1.5rem; margin-top: 1.5rem; }
+.pager a { display: inline-flex; align-items: center; min-height: 44px; }
