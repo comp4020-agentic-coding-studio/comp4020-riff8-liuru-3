@@ -122,11 +122,11 @@ export function renderApp(): string {
       </div>
 
       <aside class="side" aria-label="画中事 What's happening">
-        <section id="inspector" class="inspector" hidden aria-labelledby="insp-title"></section>
         <section class="requests" aria-labelledby="req-title">
           <h2 id="req-title">往来 <span lang="en">Requests and offers</span></h2>
           <div id="requests"><p class="quiet">还没有往来。<span lang="en">Nothing waiting yet.</span></p></div>
         </section>
+        <section id="inspector" class="inspector" hidden aria-labelledby="insp-title"></section>
         <details class="objects">
           <summary>画中景物 <span lang="en">Objects in the scene</span> <span id="obj-count"></span></summary>
           <ul id="object-list"></ul>

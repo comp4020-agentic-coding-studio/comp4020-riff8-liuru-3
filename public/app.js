@@ -378,6 +378,7 @@ function setCamera(x, y, width) {
 }
 
 function fitHeight() {
+  UI.fit = "height";
   const { w, h } = wrapSize();
   // on a wide screen the scroll's full height fills the view and you pan
   // sideways, like unrolling a handscroll; on a phone, show a good slice
@@ -386,10 +387,12 @@ function fitHeight() {
 }
 
 function fitAll() {
+  UI.fit = "all";
   setCamera(0, 0, minZoomUnits());
 }
 
 function zoom(factor, cx = UI.cam.x + UI.cam.w / 2, cy = UI.cam.y + UI.cam.h / 2) {
+  UI.fit = null;
   const width = UI.cam.w * factor;
   const height = width * (UI.cam.h / UI.cam.w);
   setCamera(cx - (cx - UI.cam.x) * factor, cy - (cy - UI.cam.y) * (height / UI.cam.h), width);
@@ -1446,10 +1449,10 @@ function renderInspector() {
   let controls = "";
   if (mine && can) {
     controls = `
-      <label>大小 <span lang="en">Size</span><input type="range" data-k="scale" min="${LIMITS.scale[0]}" max="${LIMITS.scale[1]}" step="0.05" value="${o.scale}"></label>
-      <label>角度 <span lang="en">Angle</span><input type="range" data-k="rotation" min="${LIMITS.rotation[0]}" max="${LIMITS.rotation[1]}" step="1" value="${o.rotation}"></label>
-      <label>浓淡 <span lang="en">Ink</span><input type="range" data-k="ink" min="${LIMITS.ink[0]}" max="${LIMITS.ink[1]}" step="0.05" value="${o.ink}"></label>
-      <label>远近 <span lang="en">Depth</span><select data-k="depth">${DEPTHS.map((d, i) => `<option value="${i}" ${o.depth === i ? "selected" : ""}>${["远", "中", "近"][i]} ${d}</option>`).join("")}</select></label>
+      <label><span>大小 <span lang="en">Size</span></span><input type="range" data-k="scale" min="${LIMITS.scale[0]}" max="${LIMITS.scale[1]}" step="0.05" value="${o.scale}"></label>
+      <label><span>角度 <span lang="en">Angle</span></span><input type="range" data-k="rotation" min="${LIMITS.rotation[0]}" max="${LIMITS.rotation[1]}" step="1" value="${o.rotation}"></label>
+      <label><span>浓淡 <span lang="en">Ink</span></span><input type="range" data-k="ink" min="${LIMITS.ink[0]}" max="${LIMITS.ink[1]}" step="0.05" value="${o.ink}"></label>
+      <label><span>远近 <span lang="en">Depth</span></span><select data-k="depth">${DEPTHS.map((d, i) => `<option value="${i}" ${o.depth === i ? "selected" : ""}>${["远", "中", "近"][i]} ${d}</option>`).join("")}</select></label>
       <div class="row">
         <button type="button" data-act="flip">翻转 <span lang="en">Flip</span></button>
         <div class="nudge" role="group" aria-label="微移 Nudge">
@@ -1776,10 +1779,14 @@ function frame(t) {
   requestAnimationFrame(frame);
 }
 
-new ResizeObserver(() => setCamera(UI.cam.x, UI.cam.y, UI.cam.w)).observe($("scroll-wrap"));
-requestAnimationFrame(() => {
-  fitHeight();
-  setCamera(0, 0, UI.cam.w);
-});
+// keep a fitted view fitted when the layout changes (tray collapsing,
+// rotating a phone); otherwise keep the same centre and zoom
+new ResizeObserver(() => {
+  if (UI.fit === "all") fitAll();
+  else if (UI.fit === "height") fitHeight();
+  else setCamera(UI.cam.x, UI.cam.y, UI.cam.w);
+}).observe($("scroll-wrap"));
+UI.cam.x = 0;
+fitHeight();
 connect();
 requestAnimationFrame(frame);
