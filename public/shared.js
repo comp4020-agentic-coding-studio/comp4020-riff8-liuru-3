@@ -92,11 +92,11 @@ export const INTENTS = {
 // join order within a round. Never a name, never a profile.
 export const MARKS = [
   { glyph: "松", colour: "#4f6b58" },
-  { glyph: "竹", colour: "#5d7480" },
+  { glyph: "竹", colour: "#586e79" },
   { glyph: "梅", colour: "#a44d3c" },
   { glyph: "兰", colour: "#7a6a3e" },
   { glyph: "石", colour: "#5a5a66" },
-  { glyph: "云", colour: "#6b7d8f" },
+  { glyph: "云", colour: "#5a6a79" },
   { glyph: "泉", colour: "#3f6f73" },
   { glyph: "鹤", colour: "#7b5a63" },
   { glyph: "舟", colour: "#55663f" },

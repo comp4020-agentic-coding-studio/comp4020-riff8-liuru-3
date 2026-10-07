@@ -35,44 +35,50 @@ agent was directed, not for what anyone owes.
 
 # Your harness
 
-These are the rules for this app specifically, derived from the argument in
-`README.md`. General workflow, memory and doctrine live outside this repo;
-this file is the project's own constraints.
+These are the rules for this app specifically, derived from `README.md` and
+[ADR 0002](docs/decisions/0002-shared-dream-custody.md). General workflow,
+memory and doctrine live outside this repo.
 
 ## What this app is
 
-A small shared wall (六如): visitors leave a short passing thought tagged as
-one of six similes from the Diamond Sūtra's closing line (dream, illusion,
-bubble, shadow, dew, lightning). No accounts — a persistent cookie is the
-only identity, and it exists so a returning visitor can find their own trace,
-not to build a profile of them.
+A cooperative, real-time ink-wash handscroll (六如 · 共梦长卷). One public
+room; each seven-minute round has a poetic prompt, every participant gets a
+different dealt palette of prepared motifs, and the picture freezes into an
+immutable dream trace, then dissolves. No accounts: the server-issued
+`visitor` cookie is the only identity.
 
-## Rules that follow from "good means small and quiet"
+## Rules that follow from the design
 
-- No accounts, no login, no visible follower/reader counts, no algorithmic
-  ranking of the wall. The list is plain reverse-chronological, always.
-- No feature that exists to bring someone back (streaks, notifications,
-  unread badges). The wall doesn't chase anyone.
-- A trace is permanent once posted: no edit, no delete, no admin override.
-  If that becomes a real problem, it needs a README argument first, not a
-  quiet code change.
-- Keep the six kinds fixed. Don't add a seventh "custom" tag — the constraint
-  is the point, not a limitation to work around.
-- No moderation or rate limiting yet. Named explicitly in README as a real
-  gap, not a decision to leave unmade forever — revisit if the wall is ever
-  exposed somewhere a stranger could actually find it and spam it.
+- Others' work changes only with consent: custody, borrow proposals, bubble
+  handoffs and invitations. Don't add "edit anything", delete-others, clear
+  all or whole-scene drag.
+- The six similes are behaviours (see README), not tags or buttons. Keep all
+  six; don't add a seventh mechanic just to fill a slot.
+- No chat, likes, rankings, streaks, scores, AI judging or autoplay audio.
+  Never simulate other players.
+- Archives are immutable once written. Never wipe `/data`, and keep the old
+  `traces` table as it is.
+- The server decides: every durable change is a POST through `src/game.ts`
+  (one transaction, idempotency id, monotonic event). Clients may preview,
+  never commit locally.
+- No admin, skip-timer or force-finish routes. Tests shorten rounds through
+  the timing env vars only.
+- Motifs are local SVG files listed in `MOTIFS` (`public/shared.js`) and
+  credited in `docs/assets.md`; no hotlinks or runtime generation.
 
 ## Enforced vs. judged
 
-`spec/*.test.ts` is the enforced list: valid kind, non-empty text, a 240
-character cap, and the two course-wide checks (`/` answers, `/readme/`
-publishes `README.md`). Everything else — whether the wall still feels like
-the six similes rather than a generic guestbook — is a judgement call, made
-here and revisited each crit, not something a test can catch.
+`spec/scroll.test.ts` enforces palettes, real-time delivery, validation,
+consent and staleness, the bubble race, idempotency, reconnect, restart
+reconciliation and the once-only archive; `spec/site.test.ts` checks pages
+and shipped assets; `spec/invariants.test.ts` is course-wide and stays
+unchanged. Whether a four-person scroll reads as one ink landscape is
+judged in a real browser, with screenshots, each crit.
 
-## Stack notes for future runs
+## Stack notes
 
-Plain Node (`node:http`, no framework) plus `better-sqlite3` on the Fly
-volume at `/data`. No build step: the server runs its `.ts` source directly,
-so the Docker image only needs `node`, not a bundler. Keep it this small
-unless a real feature needs more.
+Plain Node (`node:http`) plus `better-sqlite3` on the Fly volume at `/data`,
+no framework, no build step: the server runs `.ts` directly and the browser
+loads plain ES modules from `public/`. `public/shared.js` is shared by both;
+keep it plain JS. The Dockerfile copies `src`, `public`, `docs` and
+`README.md`; add new runtime directories there too.

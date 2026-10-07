@@ -1023,6 +1023,9 @@ export function respond(p: Participant, body: Body) {
     }
     const t = cleanTransform({ x: i.x, y: i.y, ...(body as object) }, motif);
     if (!t) fail(400, "transform", "位置或大小超出范围 / Position or size out of range.");
+    if (Math.hypot(t!.x - i.x, t!.y - i.y) > 160) {
+      fail(400, "too-far", "回应要放在留白附近 / An answer belongs near the opening it answers.");
+    }
     const info = db
       .prepare(
         "INSERT INTO proposals (round_id, kind, invitation_id, proposer, target, motif, transform, created_at, expires_at) VALUES (?, 'invite', ?, ?, ?, ?, ?, ?, ?)",

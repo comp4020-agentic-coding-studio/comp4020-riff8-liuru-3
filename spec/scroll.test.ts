@@ -176,6 +176,8 @@ describe("one long round", () => {
     const inv = await a.post("invite", { x: 1700, y: 500, intent: "life" });
     expect(inv.status).toBe(200);
     const pc = await mine(c);
+    // an answer belongs at the opening, not anywhere on the scroll
+    expect((await c.post("respond", { invitationId: inv.body.invitationId, motif: pc.palette[0], x: 100, y: 100 })).status).toBe(400);
     const resp = await c.post("respond", { invitationId: inv.body.invitationId, motif: pc.palette[0] });
     expect(resp.status).toBe(200);
     // only one outstanding answer per opening

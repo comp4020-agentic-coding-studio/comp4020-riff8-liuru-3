@@ -56,10 +56,10 @@ export function renderApp(): string {
   <body class="app loading">
     <a class="skip" href="#scroll">跳到画卷 <span lang="en">Skip to the scroll</span></a>
     <header class="bar">
-      <a class="brand" href="/" aria-label="六如 · 共梦长卷 A Shared Dream Scroll">
-        <img src="/static/motifs/seal.svg" alt="" width="34" height="34" />
+      <h1 class="brand-h"><a class="brand" href="/">
+        <img src="/static/motifs/seal.svg" alt="六如" width="34" height="34" />
         <span class="title"><span class="zh">共梦长卷</span><span class="en" lang="en">A Shared Dream Scroll</span></span>
-      </a>
+      </a></h1>
       <div class="dream" aria-live="off">
         <p class="prompt"><span id="prompt-zh" class="zh">……</span> <span id="prompt-en" class="en" lang="en"></span></p>
         <p class="phase-line"><span id="phase">连接中 <span lang="en">Connecting</span></span> <span id="clock" class="clock"></span></p>
@@ -266,7 +266,7 @@ export function renderArchiveList(data: { rows: ArchiveRow[]; more: boolean }, p
           <span class="dream-title">${escapeHtml(prompt.zh)}</span>
           <span class="dream-en" lang="en">${escapeHtml(prompt.en)}</span>
         </a>
-        <p class="dream-meta"><span class="marks-inline" aria-label="合作者 Dreamers">${markChips(scene)}</span> ${scene.length} 件 <span lang="en">objects</span> · ${dateFmt(row.created_at)}</p>
+        <p class="dream-meta"><span class="marks-inline"><span class="visually-hidden">合作者 Dreamers: </span>${markChips(scene)}</span> ${scene.length} 件 <span lang="en">objects</span> · ${dateFmt(row.created_at)}</p>
       </li>`;
     })
     .join("");
@@ -293,7 +293,7 @@ export function renderArchive(row: ArchiveRow): string {
     `${prompt.zh} · 梦痕`,
     `<p class="crumb"><a href="/dreams/">← 梦痕 <span lang="en">All dream traces</span></a></p>
       <h1>${escapeHtml(prompt.zh)} <span class="en" lang="en">${escapeHtml(prompt.en)}</span></h1>
-      <p class="dream-meta">第 ${row.round_id} 梦 <span lang="en">Dream ${row.round_id}</span> · ${dateFmt(row.created_at)} · <span class="marks-inline" aria-label="合作者 Dreamers">${markChips(scene)}</span> ${scene.length} 件 <span lang="en">objects</span></p>
+      <p class="dream-meta">第 ${row.round_id} 梦 <span lang="en">Dream ${row.round_id}</span> · ${dateFmt(row.created_at)} · <span class="marks-inline"><span class="visually-hidden">合作者 Dreamers: </span>${markChips(scene)}</span> ${scene.length} 件 <span lang="en">objects</span></p>
       <div class="archive-view fit" id="archive-view">
         <div id="archive-scene">${sceneSvg(scene, "d", `${prompt.zh} ${prompt.en}`)}</div>
       </div>

@@ -434,3 +434,13 @@ body.offline .rail, body.offline .tray { opacity: 0.5; pointer-events: none; }
 }
 .req .accept [lang="en"], .overlay .card .big [lang="en"] { color: #e6dccb; }
 @media (width <= 760px) { .modebar > span [lang="en"] { display: none; } .modebar { font-size: 0.85rem; } }
+
+/* short laptop screens: give the height back to the scroll */
+@media (height <= 820px) and (width > 760px) {
+  .motif-btn { grid-template-rows: 36px auto; padding: 0.1rem; }
+  .motif-btn img { max-height: 36px; }
+  .motif-btn .name { font-size: 0.72rem; }
+  .tray-head button { min-height: 32px; }
+  .prompt .en { font-size: 0.78rem; }
+}
+.brand-h { margin: 0; font-size: inherit; font-weight: normal; }
