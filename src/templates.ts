@@ -157,6 +157,7 @@ export function renderApp(): string {
       <div class="tray-head">
         <button type="button" id="tray-toggle" aria-expanded="true" aria-controls="tray-body">素材匣 <span lang="en">Your motifs</span></button>
         <span id="reroll-left" class="quiet"></span>
+        <button type="button" id="swap-mode" aria-pressed="false">换一格 <span lang="en">Swap one</span></button>
         <button type="button" id="catalogue-open">全部景物 <span lang="en">All motifs</span></button>
       </div>
       <div id="tray-body" class="tray-body">

@@ -5,7 +5,12 @@ body.app {
   overflow: hidden;
   display: grid;
   grid-template-rows: auto 1fr auto;
+  grid-template-columns: minmax(0, 1fr);
 }
+
+/* grid items default to min-width: auto and would push the page wider than
+   the phone; the scroll pans inside its own frame instead */
+.bar, .stage, .tray, .rail, .scroll-wrap, .overview-wrap, .dream { min-width: 0; }
 
 .skip { position: absolute; left: -999px; top: 0; z-index: 50; background: var(--paper); padding: 0.5rem; }
 .skip:focus { left: 0.5rem; }
@@ -132,7 +137,9 @@ body.app:not(.loading) .scroll { animation: unfurl 1.6s cubic-bezier(0.3, 0.6, 0
   box-shadow: 0 6px 30px rgb(41 43 41 / 10%);
 }
 
-.overlay.corner { place-items: end center; padding-bottom: 1rem; }
+.overlay.corner { place-items: start start; padding: 0.6rem; }
+.overlay.corner > .card { max-width: min(24rem, 80%); padding: 0.5rem 0.8rem; text-align: left; font-size: 0.9rem; }
+.overlay.corner > .card p { margin: 0.2rem 0; }
 .overlay .card h2 { font-family: var(--serif); margin: 0 0 0.3rem; font-weight: normal; font-size: 1.5rem; }
 .overlay .card .en { color: var(--ink-mid); }
 .overlay .card .big { font-size: 1.15rem; padding: 0.5rem 1.6rem; background: var(--ink); color: var(--paper); border-color: var(--ink); margin-top: 0.6rem; }
@@ -354,8 +361,8 @@ body.motion.storm-gust .bob { animation-duration: 1.2s; }
 body.storm-still #art { filter: brightness(0.95) sepia(0.08); }
 
 /* ---- phases ---- */
-body.phase-reveal .rail, body.phase-reveal .tray, body.phase-reveal .inspector,
-body.phase-dissolve .rail, body.phase-dissolve .tray, body.phase-dissolve .inspector { visibility: hidden; }
+body.phase-reveal .tray, body.phase-reveal .inspector, body.phase-reveal .rail .tool[data-tool],
+body.phase-dissolve .tray, body.phase-dissolve .inspector, body.phase-dissolve .rail .tool[data-tool] { display: none; }
 body.offline .rail, body.offline .tray { opacity: 0.5; pointer-events: none; }
 
 /* ---- smaller laptops ---- */
@@ -400,14 +407,30 @@ body.offline .rail, body.offline .tray { opacity: 0.5; pointer-events: none; }
   .side.open { transform: none; }
   .side .requests h2 { min-height: 40px; display: flex; align-items: center; }
   .side-handle { display: block; }
-  .tray { padding-bottom: 56px; }
-  .palette { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .tray { padding: 0.2rem 0.5rem 56px; }
+  .tray-head button { min-height: 44px; }
+  #tray-toggle .en, #tray-toggle [lang="en"], #reroll-left { display: none; }
+  .palette {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: 78px;
+    overflow-x: auto;
+    padding-bottom: 0.2rem;
+  }
+  .motif-btn { grid-template-rows: 42px auto; min-height: 44px; }
+  .motif-btn img { max-height: 42px; }
+  .motif-btn .name [lang="en"] { display: none; }
+  .reroll { display: none; }
+  body.swapping .motif-btn { border: 2px dashed var(--cinnabar); }
+  .guide { font-size: 0.82rem; padding: 0.5rem 0.7rem; }
+  .guide ol span[lang="en"] { display: none; }
   .tray.collapsed .tray-body { display: none; }
   .guide { left: 0.5rem; right: 0.5rem; top: 0.5rem; max-width: none; }
   .toast { top: auto; bottom: 7rem; }
 }
 
 @media (width > 760px) {
-  .side-handle { display: none; }
+  #swap-mode { display: none; }
 }
 .req .accept [lang="en"], .overlay .card .big [lang="en"] { color: #e6dccb; }
+@media (width <= 760px) { .modebar > span [lang="en"] { display: none; } .modebar { font-size: 0.85rem; } }

@@ -849,6 +849,7 @@ function renderTray() {
     ul.dataset.html = html;
     ul.innerHTML = html;
   }
+  $("swap-mode").disabled = !(p && p.palette.length && S.phase === "compose" && p.rerollsUsed < LIMITS.rerolls);
   $("reroll-left").innerHTML = p && p.palette.length ? `可换 ${LIMITS.rerolls - p.rerollsUsed} 次 <span lang="en">${LIMITS.rerolls - p.rerollsUsed} swaps left</span>` : "";
 }
 
@@ -860,6 +861,12 @@ $("palette").addEventListener("click", async (ev) => {
   }
   const btn = ev.target.closest(".motif-btn");
   if (!btn || UI.trayDragged) return;
+  if (UI.swapMode) {
+    const slot = myPlayer()?.palette.indexOf(btn.dataset.motif);
+    setSwapMode(false);
+    if (slot !== undefined && slot >= 0) await post("reroll", { slot });
+    return;
+  }
   chooseMotif(btn.dataset.motif);
 });
 
@@ -925,6 +932,7 @@ async function placeAt(motif, p) {
   if (r) {
     UI.selected = r.objectId;
     resetMode();
+    openSide();
     renderAll();
   }
 }
@@ -956,6 +964,16 @@ $("catalogue-open").addEventListener("click", () => {
     .join("");
   $("catalogue").showModal();
 });
+
+// On phones the per-slot swap buttons give way to one toggle: press it,
+// then tap the motif to swap.
+function setSwapMode(on) {
+  UI.swapMode = on;
+  $("swap-mode").setAttribute("aria-pressed", String(on));
+  document.body.classList.toggle("swapping", on);
+  if (on) say("点一件景物把它换掉 Tap a motif to swap it for another.");
+}
+$("swap-mode").addEventListener("click", () => setSwapMode(!UI.swapMode));
 
 $("tray-toggle").addEventListener("click", () => {
   const collapsed = $("tray").classList.toggle("collapsed");
@@ -1135,6 +1153,8 @@ async function catchBubble(offerId) {
   UI.wantOffer = offerId;
   const r = await post("claim", { offerId });
   if (r) {
+    // on a phone, get the sheet out of the way so the scroll can be tapped
+    document.querySelector(".side").classList.remove("open");
     UI.receiving = offerId;
     UI.mode = "receive";
     UI.selected = null;
@@ -1149,6 +1169,7 @@ async function catchBubble(offerId) {
 }
 
 function beginBorrow(o) {
+  document.querySelector(".side").classList.remove("open");
   UI.mode = "borrow";
   UI.ghost = { motif: o.motif, x: Math.min(SCENE.width, o.x + 80), y: o.y, scale: o.scale, rotation: o.rotation, flip: o.flip };
   for (const m of ["place", "invite", "dew", "pan", "borrow", "respond", "receive"]) document.body.classList.toggle(`mode-${m}`, UI.mode === m);
@@ -1158,6 +1179,7 @@ function beginBorrow(o) {
 }
 
 function beginRespond(inv) {
+  document.querySelector(".side").classList.remove("open");
   UI.mode = "respond";
   UI.respondTo = inv.id;
   UI.motif = null;
@@ -1293,6 +1315,7 @@ svg.addEventListener("pointerup", async (ev) => {
   if (d.type === "move") {
     const o = S.objects.get(d.id);
     UI.selected = d.id;
+    if (!d.moved) openSide();
     if (d.moved && o) {
       sendPreview({ kind: "end" }, true);
       const at = UI.local.get(d.id);
@@ -1502,6 +1525,7 @@ $("inspector").addEventListener("click", async (ev) => {
   const o = S.objects.get(UI.selected);
   if (b.dataset.act === "deselect") {
     UI.selected = null;
+    document.querySelector(".side").classList.remove("open");
     renderAll();
     return;
   }
