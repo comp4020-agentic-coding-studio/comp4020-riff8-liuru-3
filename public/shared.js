@@ -232,8 +232,8 @@ export function bubbleDrift(offer, t) {
 
 /** Clamp and validate a client-supplied transform. Returns undefined if invalid. */
 export function cleanTransform(t, motifId) {
-  const m = MOTIF_BY_ID[motifId];
-  if (!m || typeof t !== "object" || t === null) return undefined;
+  if (typeof motifId !== "string" || !Object.hasOwn(MOTIF_BY_ID, motifId)) return undefined;
+  if (typeof t !== "object" || t === null) return undefined;
   const num = (v) => typeof v === "number" && Number.isFinite(v);
   const { x, y } = t;
   const scale = t.scale ?? 1;

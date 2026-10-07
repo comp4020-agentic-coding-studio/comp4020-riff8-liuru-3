@@ -215,11 +215,13 @@ const server = createServer(async (req, res) => {
         "x-accel-buffering": "no",
         ...cookieHeader,
       });
-      // Snapshot and subscription in the same synchronous turn: no event can
-      // commit between them, so the client's cursor has no gap to fall into.
+      // Snapshot first, then subscribe, in the same synchronous turn: events
+      // join() itself commits are in the snapshot, and nothing can commit
+      // between the two, so the client's cursor has no gap to fall into.
       const client = { res, pid: p.pid };
+      const snap = game.join(p, new Set([...online(), p.pid]));
       clients.add(client);
-      send(res, "snapshot", game.join(p, online()));
+      send(res, "snapshot", snap);
       broadcastPresence();
       const beat = setInterval(() => res.write(": beat\n\n"), 20_000);
       req.on("close", () => {
@@ -261,7 +263,10 @@ const server = createServer(async (req, res) => {
         json(res, 429, { ok: false, code: "slow", message: "慢一点 / Slow down a little." });
         return;
       }
-      const result = handler(p, body) as Record<string, unknown>;
+      // Action ids are scoped to their route, so a reused id on a different
+      // action can't replay the wrong stored response.
+      const scoped = typeof body.actionId === "string" ? `${url.pathname.slice(5)}:${body.actionId}` : body.actionId;
+      const result = handler(p, { ...body, actionId: scoped }) as Record<string, unknown>;
       json(res, result?.ok === false ? 409 : 200, { ok: true, ...result }, cookieHeader);
       return;
     }

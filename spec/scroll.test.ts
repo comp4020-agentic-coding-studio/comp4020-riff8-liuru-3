@@ -353,3 +353,67 @@ describe("a restart", () => {
     }
   });
 });
+
+describe("limits during handovers", () => {
+  let server: TestServer;
+  beforeAll(async () => {
+    server = await startServer({ COMPOSE_SECONDS: "120" });
+  });
+  afterAll(() => server.stop());
+
+  const placeMany = async (v: Visitor, n: number, y: number) => {
+    const s = await v.state();
+    const palette = s.players.find((p: any) => p.pid === s.me).palette;
+    const ids: number[] = [];
+    for (let i = 0; i < n; i++) {
+      const r = await v.post("place", { motif: palette[i % 8], x: 60 + i * 150, y });
+      expect(r.status, JSON.stringify(r.body)).toBe(200);
+      ids.push(r.body.objectId);
+    }
+    return ids;
+  };
+  const offerOf = async (v: Visitor, id: number) => {
+    const o = (await v.state()).objects.find((x: any) => x.id === id);
+    return (await v.post("offer", { objectId: id, version: o.version })).body.offerId;
+  };
+
+  it("counts a caught bubble against the catcher's twelve, and lets handovers through a full scroll", async () => {
+    const vs = Array.from({ length: 5 }, () => new Visitor(server.url));
+    await begin(vs[0]);
+    for (const v of vs.slice(1)) await v.state();
+    await placeMany(vs[0], 12, 100);
+    await placeMany(vs[1], 11, 250);
+    await placeMany(vs[2], 12, 400);
+    const d = await placeMany(vs[3], 12, 550);
+    // 47 on the scroll; vs[1] holds 11. Two bubbles from vs[3]:
+    const o1 = await offerOf(vs[3], d[0]);
+    const o2 = await offerOf(vs[3], d[1]);
+    expect((await vs[1].post("claim", { offerId: o1 })).status).toBe(200);
+    const second = await vs[1].post("claim", { offerId: o2 });
+    expect(second.status).toBe(409);
+    expect(second.body.code).toBe("hands-full");
+    await vs[1].post("receive", { offerId: o1, x: 1000, y: 700 });
+    // fill the scroll to 48, then a handover still works
+    const s4 = await vs[4].state();
+    const p4 = s4.players.find((p: any) => p.pid === s4.me).palette;
+    expect((await vs[4].post("place", { motif: p4[0], x: 1200, y: 800 })).status).toBe(200);
+    expect((await vs[4].state()).objects.filter((o: any) => o.status !== "withdrawn")).toHaveLength(48);
+    expect((await vs[4].post("claim", { offerId: o2 })).status).toBe(200);
+    expect((await vs[4].post("receive", { offerId: o2, x: 1300, y: 800 })).status).toBe(200);
+  });
+
+  it("only accepts real intents, and two openings per person per dream", async () => {
+    const v = new Visitor(server.url);
+    await v.state();
+    for (const intent of ["toString", "__proto__", "constructor"]) {
+      expect((await v.post("invite", { x: 100, y: 100, intent })).status).toBe(400);
+    }
+    expect((await v.post("place", { motif: "constructor", x: 100, y: 100 })).status).toBe(400);
+    expect((await v.post("invite", { x: 100, y: 100, intent: "open" })).status).toBe(200);
+    const second = await v.post("invite", { x: 300, y: 100, intent: "open" });
+    const w = new Visitor(server.url);
+    await w.state();
+    await w.post("acknowledge", { invitationId: second.body.invitationId });
+    expect((await v.post("invite", { x: 500, y: 100, intent: "life" })).status).toBe(409);
+  });
+});

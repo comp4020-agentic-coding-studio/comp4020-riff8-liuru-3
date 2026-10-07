@@ -708,7 +708,7 @@ export function reconcile(now = Date.now()): void {
 
 // ---------------------------------------------------------------- actions
 
-const ACTION_ID = /^[A-Za-z0-9_-]{8,64}$/;
+const ACTION_ID = /^[a-z]+:[A-Za-z0-9_-]{8,64}$/;
 
 /**
  * Run one mutation exactly once per (participant, actionId): a retried
@@ -769,7 +769,9 @@ function requireVersion(o: ObjectRow, version: unknown): void {
   }
 }
 
-function capacity(r: RoundRow, custodian: number): void {
+// The scroll's limit counts objects on it; a handover moves one without
+// adding to it, so handovers check only the receiver's hands.
+function sceneCapacity(r: RoundRow): void {
   const scene = (
     db
       .prepare("SELECT COUNT(*) AS n FROM objects WHERE round_id = ? AND status != 'withdrawn'")
@@ -778,14 +780,25 @@ function capacity(r: RoundRow, custodian: number): void {
   if (scene >= LIMITS.sceneObjects) {
     fail(409, "scene-full", "画卷已满，收回一件可腾出位置 / The scroll is full: withdrawing one frees a place.");
   }
+}
+
+// A caught bubble still being set down counts against the catcher's hands.
+function handsCapacity(r: RoundRow, custodian: number): void {
   const mine = (
     db
-      .prepare("SELECT COUNT(*) AS n FROM objects WHERE round_id = ? AND custodian = ? AND status != 'withdrawn'")
-      .get(r.id, custodian) as { n: number }
+      .prepare(
+        "SELECT (SELECT COUNT(*) FROM objects WHERE round_id = ? AND custodian = ? AND status != 'withdrawn') + (SELECT COUNT(*) FROM offers WHERE round_id = ? AND claimant = ? AND status = 'claimed') AS n",
+      )
+      .get(r.id, custodian, r.id, custodian) as { n: number }
   ).n;
   if (mine >= LIMITS.perCustodian) {
     fail(409, "hands-full", "你照看的已有十二件 / You're already caring for twelve objects.");
   }
+}
+
+function capacity(r: RoundRow, custodian: number): void {
+  sceneCapacity(r);
+  handsCapacity(r, custodian);
 }
 
 function inScene(x: unknown, y: unknown): { x: number; y: number } {
@@ -892,7 +905,7 @@ export function place(p: Participant, body: Body) {
     r = requirePhase(r, now, ["compose"]);
     const player = requirePlayer(r, p, now);
     const motif = body.motif;
-    if (typeof motif !== "string" || !MOTIF_BY_ID[motif]) fail(400, "motif", "没有这种景物 / Unknown motif.");
+    if (typeof motif !== "string" || !Object.hasOwn(MOTIF_BY_ID, motif)) fail(400, "motif", "没有这种景物 / Unknown motif.");
     if (!(JSON.parse(player.palette) as string[]).includes(motif as string)) {
       fail(403, "not-yours", "这不在你的素材匣里，可向别人借 / Not in your tray: ask someone who has it.");
     }
@@ -979,13 +992,13 @@ export function invite(p: Participant, body: Body) {
     requirePlayer(r, p, now);
     const { x, y } = inScene(body.x, body.y);
     const intent = body.intent;
-    if (typeof intent !== "string" || !(intent in INTENTS)) fail(400, "intent", "未知的意图 / Unknown intention.");
+    if (typeof intent !== "string" || !Object.hasOwn(INTENTS, intent)) fail(400, "intent", "未知的意图 / Unknown intention.");
     const open = (
       db
-        .prepare("SELECT COUNT(*) AS n FROM invitations WHERE round_id = ? AND owner = ? AND status = 'open'")
+        .prepare("SELECT COUNT(*) AS n FROM invitations WHERE round_id = ? AND owner = ?")
         .get(r.id, p.id) as { n: number }
     ).n;
-    if (open >= LIMITS.invitationsPerPlayer) fail(409, "invitations", "最多留两处空白 / Two openings at most.");
+    if (open >= LIMITS.invitationsPerPlayer) fail(409, "invitations", "每梦最多留两处空白 / Two openings per dream at most.");
     const info = db
       .prepare("INSERT INTO invitations (round_id, owner, x, y, intent, created_at) VALUES (?, ?, ?, ?, ?, ?)")
       .run(r.id, p.id, x, y, intent, now);
@@ -1017,7 +1030,7 @@ export function respond(p: Participant, body: Body) {
       .get(i.id);
     if (busy) fail(409, "busy", "已有人在回应 / Someone is already answering it.");
     const motif = body.motif;
-    if (typeof motif !== "string" || !MOTIF_BY_ID[motif]) fail(400, "motif", "没有这种景物 / Unknown motif.");
+    if (typeof motif !== "string" || !Object.hasOwn(MOTIF_BY_ID, motif)) fail(400, "motif", "没有这种景物 / Unknown motif.");
     if (!(JSON.parse(player.palette) as string[]).includes(motif as string)) {
       fail(403, "not-yours", "只能用自己素材匣里的 / Answer with a motif from your own tray.");
     }
@@ -1125,7 +1138,7 @@ export function accept(p: Participant, body: Body) {
       // returns a refusal instead of throwing (which would roll it back).
       return { ok: false, code: "stale", message: "此物已变，提议作废 / The object changed, so the proposal no longer applies." };
     }
-    capacity(r, pr.proposer);
+    handsCapacity(r, pr.proposer);
     db.prepare(
       "UPDATE objects SET x = ?, y = ?, scale = ?, rotation = ?, flip = ?, ink = ?, depth = ?, custodian = ?, version = version + 1 WHERE id = ?",
     ).run(t.x, t.y, t.scale, t.rotation, t.flip ? 1 : 0, t.ink, t.depth, pr.proposer, o.id);
@@ -1191,7 +1204,7 @@ export function claim(p: Participant, body: Body) {
       fail(409, "taken", "已被接住 / Someone has already received it.");
     }
     if (o.status !== "floating") fail(409, "gone", "泡已散了 / That bubble has burst.");
-    capacity(r, p.id);
+    handsCapacity(r, p.id);
     const lease = Math.min(now + TIMING.lease, r.refine_end);
     // The status guard is the race: of two simultaneous claims, only one
     // update finds the offer still floating.

@@ -204,6 +204,8 @@ async function resync() {
     for (const e of pending) onChange(e);
   } catch {
     S.resyncing = false;
+    // don't sit on a stale scene until the next gap: try again shortly
+    setTimeout(resync, 1500);
   }
 }
 
