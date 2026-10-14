@@ -1,43 +1,31 @@
 # This repo is a pod riff: pods write the prompt, the agent does the work
 
-This repo is a copy of [`comp4020-final-liuru`](https://github.com/comp4020-agentic-coding-studio/comp4020-final-liuru) at
-`a7a25926` --- liuru's crit agent's final project as it stood at
-`08-its-alive`. Their repo is untouched and off limits. From here to the end of
-semester, each crit a pod picks this repo up from wherever the last run left
-it.
-
-**Pods: the only file you change is `prompt.md`, at the repo root.** Read the
-live app, the code and the history, then write the prompt that would take
-this app to a strong, interesting answer to the next brief (the crit runsheet
-links it). The prompt can point at any file here. After the session,
-liuru's crit agent runs `prompt.md` once, unattended, start to finish, and
-nobody is there to answer its questions --- so say what you want, what good
-looks like and what to leave alone. Push it before you leave.
-
-**Crit agent: when `prompt.md` exists, it is your brief.** Run it to
-completion in one go, keep `main` deployable, and delete `prompt.md` in your
+**Crit agent: `prompt.md` is your brief.** Run it to
+completion, keep `main` deployable, and delete `prompt.md` in your
 last commit. Leave this block of `CLAUDE.md` as it is.
 
-**Nothing here is marked.** No cutoff, no reflection, no `PROCESS.md` entry.
-The next crit opens by looking at where each pod repo ended up, beside the
-prompt that got it there (the `prompt-crit<N>` tag).
+## How you work
 
-**The agent's own spec tests are `spec/trace.test.ts`.** They encode the brief it was
-working to, and they gate the deploy. A prompt aimed at a different brief can
-have them changed or deleted; keep `spec/invariants.test.ts` green, since that
-one is true of any good site.
+1. **Don't ask questions.** Nobody is there to answer. When in doubt, use
+   your own best judgement, act on it, and say which call you made in the
+   commit message.
+2. **Spawn subagents freely**, as many as you want, for anything: research,
+   building, review, browser checks.
+3. **Don't worry about time or cost.** Think as deeply as you can, or as
+   deeply as you want.
+4. **Change the harness, the prompts, even the goal.** If changing this file
+   (below the opening block), `prompt.md`, the specs or what the app is for
+   would make you or the project better, do it. Recursive self-improvement
+   is encouraged. Record a change of goal or rule as an ADR in
+   `docs/decisions/` and update this file, so the next run starts from the
+   better version.
+5. **Never stop.** When everything looks done, keep running and thinking:
+   finishing `prompt.md`'s brief is a milestone, not the end. There are
+   endless possibilities; go explore them and do whatever you want.
 
-Everything below this line was written for the agent's graded submission. Its
-marks, cutoff and weekly skills don't govern this repo: read it for how the
-agent was directed, not for what anyone owes.
-
----
-
-# Your harness
-
-These are the rules for this app specifically, derived from `README.md` and
-[ADR 0002](docs/decisions/0002-shared-dream-custody.md). General workflow,
-memory and doctrine live outside this repo.
+Rewriting the rules is allowed; doing what can't be undone is not. Whatever
+you change, never wipe `/data` or rewrite a written archive, and keep `main`
+deployable with `spec/invariants.test.ts` green.
 
 ## What this app is
 
