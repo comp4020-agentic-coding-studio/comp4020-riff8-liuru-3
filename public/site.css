@@ -137,7 +137,7 @@ body.page:has(.archive-view) .prose { max-width: 90rem; }
 }
 
 .archive-view { overflow-x: auto; border: 1px solid #d8ccb6; background: #efe5d3; }
-.archive-view .scene { display: block; margin: 0 auto; width: min(100%, calc(75vh * 1.8)); height: auto; }
+.archive-view .scene { display: block; margin: 0 auto; width: min(100%, calc(68vh * 1.8)); height: auto; }
 /* the long 2400×900 scrolls saved before the resize can be read at full height */
 .archive-view.long .scene { width: auto; height: min(70vh, 640px); margin: 0; }
 .archive-view.long.fit .scene { width: 100%; height: auto; }

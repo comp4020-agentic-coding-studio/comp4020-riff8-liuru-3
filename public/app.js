@@ -372,6 +372,12 @@ function fitView() {
   // keep the floating header, rail, tray and side panels off the picture
   // where there's room for that; on small screens they overlay it
   const pad = insets(w, h);
+  // a little paper showing around the picture's edge, where there's room
+  const m = Math.min(16, w * 0.012);
+  pad.t += m;
+  pad.b += m;
+  pad.l += m;
+  pad.r += m;
   const availW = Math.max(w * 0.5, w - pad.l - pad.r);
   const availH = Math.max(h * 0.5, h - pad.t - pad.b);
   const k = Math.min(availW / sc.width, availH / sc.height);
@@ -398,8 +404,19 @@ function insets(w, h) {
   const bar = box(".bar");
   const tray = box(".tray");
   const rail = box(".rail");
-  // on a phone everything floats over the picture
-  if (w < 700 || h < 420) return { t: bar ? Math.min(bar.bottom, h * 0.18) : 0, b: 0, l: 0, r: 0 };
+  // portrait phone: the picture sits in the band between the bar and the
+  // tools; with the scene's width as the limit, there's height to spare
+  if (w < 700) {
+    const low = Math.min(tray ? tray.top : h, rail ? rail.top : h);
+    return { t: bar ? bar.bottom + 4 : 0, b: h - low + 4, l: 0, r: 0 };
+  }
+  // short landscape (a phone on its side): bar above, tray below, rail on the
+  // left, and the compact request and chat handles on the right
+  if (h < 500) {
+    const handles = [box(".side-handle"), box(".chat-toggle")].filter(Boolean);
+    const r = handles.length ? w - Math.min(...handles.map((x) => x.left)) + 4 : 0;
+    return { t: bar ? bar.bottom + 2 : 0, b: tray ? h - tray.top + 2 : 0, l: rail ? rail.right + 4 : 0, r };
+  }
   // an open requests panel or chat makes room on a wide screen, rather than
   // covering the right-hand side of the picture
   const side = $("side").classList.contains("open") ? box(".side") : null;
@@ -465,7 +482,13 @@ function sceneObjects() {
 
 function renderAll() {
   document.body.classList.remove("loading");
+  const phaseWas = document.body.dataset.phase;
   for (const ph of Object.keys(PHASES)) document.body.classList.toggle(`phase-${ph}`, S.phase === ph);
+  // panels appear and disappear with the phase; refit around them
+  if (phaseWas !== S.phase) {
+    document.body.dataset.phase = S.phase;
+    requestAnimationFrame(fitView);
+  }
   renderHeader();
   renderScene();
   renderOverlay();
@@ -531,6 +554,9 @@ function el(tag, attrs = {}, html = "") {
 }
 
 const objectEls = new Map(); // id -> {g, sig, anim: {whole, parts[], glint, light}}
+const cursorEls = new Map(); // pid -> {g, sig, x, y, label}
+const CURSOR_IDLE = 6000; // a pointer at rest fades after this long
+const LABEL_IDLE = 1800; // and its label sooner
 
 // One motif image, or its separately animated parts stacked in paint order.
 function motifInner(o) {
@@ -713,6 +739,8 @@ function renderInvites() {
 }
 
 function renderSelection() {
+  // a frozen picture is shown clean
+  if (!editable()) UI.selected = null;
   const o = UI.selected && S.objects.get(UI.selected);
   if (!o) {
     setHtml("selection", "");
@@ -1926,6 +1954,21 @@ document.querySelector(".menu").addEventListener("click", (ev) => {
 });
 
 if (!localStorage.getItem("liuru-guide")) $("guide").hidden = false;
+
+// A portrait phone shows the whole picture, but small: suggest turning it.
+const portrait = matchMedia("(orientation: portrait) and (max-width: 700px)");
+function renderTurnHint() {
+  $("turn-hint").hidden = !portrait.matches || localStorage.getItem("liuru-turn") === "seen";
+}
+portrait.addEventListener("change", () => {
+  renderTurnHint();
+  fitView();
+});
+$("turn-hint").addEventListener("click", () => {
+  localStorage.setItem("liuru-turn", "seen");
+  renderTurnHint();
+});
+renderTurnHint();
 $("guide-close").addEventListener("click", () => {
   $("guide").hidden = true;
   localStorage.setItem("liuru-guide", "seen");
@@ -2092,13 +2135,10 @@ function cursorLabel(pid, c) {
   return `${who} · empty paper`;
 }
 
-const CURSOR_IDLE = 6000; // fades after this long at rest
-const LABEL_IDLE = 1800;
 
 // Keyed elements, one per person; each frame eases the drawn position toward
 // the last reported one, so 16 Hz updates still glide. Rebuilt only when the
 // label or shape changes.
-const cursorEls = new Map(); // pid -> {g, sig, x, y}
 
 function renderCursors() {
   const layer = $("cursors");

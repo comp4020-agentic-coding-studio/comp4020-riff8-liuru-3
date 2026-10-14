@@ -243,7 +243,8 @@ body.app:not(.motion) #world { animation: none; }
   right: 0.5rem;
   top: calc(var(--bar-b) + 0.5rem);
   width: 19rem;
-  max-height: calc(100dvh - var(--bar-b) - var(--tray-h) - 1rem);
+  /* leaves room for the chat handle below it */
+  max-height: calc(100dvh - var(--bar-b) - var(--tray-h) - 4.6rem);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   font-size: 0.9rem;
@@ -572,6 +573,32 @@ body.offline .rail, body.offline .tray { opacity: 0.5; pointer-events: none; }
   .motif-btn img { max-height: 30px; }
   .reroll { display: none; }
   .rail { top: calc(var(--bar-b) + 0.3rem); bottom: auto; transform: none; }
+}
+
+/* a phone on its side: a compact bar, and the requests and chat handles
+   stacked small at the right edge, opening over the picture */
+@media (height <= 500px) and (width > 700px) {
+  .bar { top: 0.25rem; padding: 0 0.5rem; }
+  .bar .title, .prompt .en, .marks { display: none; }
+  .prompt .zh { font-size: 1rem; }
+  .side { top: calc(var(--bar-b) + 0.3rem); right: 0.3rem; width: auto; max-height: calc(100dvh - var(--bar-b) - var(--tray-h) - 0.8rem); }
+  .chat { top: calc(var(--bar-b) + 3.4rem); bottom: auto; right: 0.3rem; width: auto; max-height: calc(100dvh - var(--bar-b) - var(--tray-h) - 4rem); }
+  .side-handle [lang="en"], .chat-toggle [lang="en"] { display: none; }
+  .side-handle, .chat-toggle { min-height: 44px; }
+  .side.open, .chat:not(.collapsed) { width: min(19rem, 60vw); z-index: 21; }
+  .tool { min-width: 44px; min-height: 44px; }
+  .tool .en { display: none; }
+}
+
+.turn-hint {
+  left: 50%;
+  transform: translateX(-50%);
+  top: calc(var(--bar-b) + 0.5rem);
+  font-size: 0.85rem;
+  padding: 0.3rem 0.8rem;
+  width: max-content;
+  max-width: calc(100% - 1rem);
+  text-align: center;
 }
 
 .req .accept [lang="en"], .overlay .card .big [lang="en"] { color: #e6dccb; }

@@ -123,6 +123,7 @@ export function renderApp(): string {
         <button type="button" class="tool" data-tool="dew" aria-pressed="false"><span class="zh">露</span><span class="en" lang="en">Dew <span id="dew-left"></span></span></button>
       </div>
 
+      <button type="button" id="turn-hint" class="turn-hint float" hidden>横过来，画更大 <span lang="en">Turn your phone sideways for a bigger picture</span> ×</button>
       <div id="overlay" class="overlay" hidden></div>
       <div id="modebar" class="modebar" hidden></div>
       <div id="guide" class="guide float" hidden>
