@@ -48,3 +48,22 @@ it("refuses to serve files outside public/", async () => {
   const res2 = await fetch(new URL("/static/%2e%2e/src/db.ts", baseUrl));
   expect(res2.status).toBe(404);
 });
+
+it("shows the whole picture: no pan, zoom, overview or Fit controls remain", async () => {
+  const html = await (await fetch(new URL("/", baseUrl))).text();
+  for (const id of ["zoom-in", "zoom-out", "fit", "overview", "scroll-wrap"]) expect(html, id).not.toContain(`id="${id}"`);
+  expect(html).not.toContain('data-tool="pan"');
+  expect(html).not.toMatch(/Zoom in|Zoom out|Slow panorama/);
+  // the chat, the companion control and the motion and pointer toggles are there instead
+  for (const id of ["chat", "companion", "motion", "cursors-toggle", "fullscreen"]) expect(html, id).toContain(`id="${id}"`);
+  const js = await (await fetch(new URL("/static/app.js", baseUrl))).text();
+  expect(js).not.toMatch(/setCamera|zoom\(|overview/);
+});
+
+it("ships the animated motif parts the client draws from", async () => {
+  const { PARTS } = await import("../public/motion.js");
+  for (const def of Object.values(PARTS) as { parts: { id: string }[] }[]) {
+    for (const p of def.parts) expect((await fetch(new URL(`/static/motifs/parts/${p.id}.svg`, baseUrl))).status, p.id).toBe(200);
+  }
+  expect((await fetch(new URL("/static/motifs/parts/water-glint.svg", baseUrl))).status).toBe(200);
+});

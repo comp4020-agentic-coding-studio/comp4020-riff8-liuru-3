@@ -493,12 +493,11 @@ body.motion .highlight-ring { animation: breathe 1.3s ease-in-out infinite; tran
 
 /* ---- other people's pointers ---- */
 #cursors { pointer-events: none; }
-.cursor { transition: transform 0.12s linear, opacity 0.6s; }
+.cursor { transition: opacity 0.6s; }
 .cursor-label { transition: opacity 0.5s; }
 .cursor-label text { font-family: var(--sans); font-size: 12px; fill: #fbf6ec; }
 .cursor-tag { opacity: 0.92; }
 .cursor-tag.agent { stroke: #fbf6ec; stroke-width: 1; stroke-dasharray: 3 2; }
-body:not(.motion) .cursor { transition: opacity 0.6s; }
 
 .shadow-ghost { animation: shadow-fade var(--life, 10s) linear both; }
 @keyframes shadow-fade { from { opacity: 0.55; } to { opacity: 0; } }

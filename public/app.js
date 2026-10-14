@@ -1988,7 +1988,7 @@ function openPresence() {
     for (const c of m.c ?? []) {
       const was = UI.cursors.get(c.pid);
       const moved = !was || Math.hypot(was.x - c.x, was.y - c.y) > 2 || was.act !== c.act || was.objectId !== c.objectId;
-      UI.cursors.set(c.pid, { ...c, at: t, moved: moved ? t : (was?.moved ?? t), from: was ? { x: was.dx ?? was.x, y: was.dy ?? was.y } : null });
+      UI.cursors.set(c.pid, { ...c, at: t, moved: moved ? t : (was?.moved ?? t) });
     }
     for (const pid of m.gone ?? []) UI.cursors.delete(pid);
     renderCursors();
@@ -2095,37 +2095,66 @@ function cursorLabel(pid, c) {
 const CURSOR_IDLE = 6000; // fades after this long at rest
 const LABEL_IDLE = 1800;
 
+// Keyed elements, one per person; each frame eases the drawn position toward
+// the last reported one, so 16 Hz updates still glide. Rebuilt only when the
+// label or shape changes.
+const cursorEls = new Map(); // pid -> {g, sig, x, y}
+
 function renderCursors() {
-  const g = $("cursors");
+  const layer = $("cursors");
   const t = performance.now();
   const hide = !UI.showCursors || S.phase === "reveal" || S.phase === "dissolve";
-  let out = "";
+  const k = UI.view.k || 1;
+  const size = 1 / k; // screen-sized whatever the scene's drawn size
+  const seen = new Set();
   if (!hide) {
-    const k = UI.view.k || 1;
-    // screen-sized regardless of how big the scene is drawn
-    const size = 1 / k;
     for (const [pid, c] of UI.cursors) {
       if (pid === S.me) continue;
       const idle = t - c.moved;
       if (idle > CURSOR_IDLE + 1500) continue;
-      // touch points show only while touching: the sender sends "leave" on lift
+      seen.add(pid);
       const fade = idle < CURSOR_IDLE ? 1 : Math.max(0, 1 - (idle - CURSOR_IDLE) / 1500);
-      const labelOn = idle < LABEL_IDLE || c.act;
+      const labelOn = idle < LABEL_IDLE || !!c.act;
       const m = markOf(pid);
       const agent = isAgent(pid);
-      const label = escapeText(cursorLabel(pid, c));
-      const shape = c.touch
-        ? `<circle r="13" fill="${m.colour}" fill-opacity="0.18" stroke="${m.colour}" stroke-width="2"/>`
-        : `<path d="M0 0 L0 17 L4.6 12.8 L8 20 L11 18.6 L7.8 11.6 L14 11.4 Z" fill="${m.colour}" stroke="#fbf6ec" stroke-width="1.4" stroke-linejoin="round"${agent ? ' stroke-dasharray="3 2"' : ""}/>`;
-      const tag = `<g class="cursor-label" opacity="${labelOn ? 1 : 0}" transform="translate(${c.touch ? 16 : 15} ${c.touch ? -10 : 20})">
-          <rect class="cursor-tag${agent ? " agent" : ""}" x="0" y="-13" rx="4" height="20" width="${Math.max(30, label.length * 7.4 + 14)}" fill="${m.colour}"/>
-          <text x="7" y="2">${label}</text></g>`;
-      out += `<g class="cursor" data-pid="${pid}" opacity="${fade.toFixed(2)}" transform="translate(${c.x} ${c.y}) scale(${size.toFixed(4)})">${shape}${tag}</g>`;
+      const label = cursorLabel(pid, c);
+      const width = Math.max(30, label.length * 7.4 + 14);
+      // keep the label on screen: near the right edge it hangs to the left
+      const flipLabel = (c.x - UI.view.x) * k + (width + 30) > (UI.view.w * k) - 8;
+      const sig = [label, c.touch, agent, m.colour, flipLabel].join("|");
+      let e = cursorEls.get(pid);
+      if (!e) {
+        e = { g: el("g", { class: "cursor", "data-pid": pid }), sig: "", x: c.x, y: c.y };
+        cursorEls.set(pid, e);
+        layer.appendChild(e.g);
+      }
+      if (e.sig !== sig) {
+        e.sig = sig;
+        const shape = c.touch
+          ? `<circle r="13" fill="${m.colour}" fill-opacity="0.18" stroke="${m.colour}" stroke-width="2"/>`
+          : `<path d="M0 0 L0 17 L4.6 12.8 L8 20 L11 18.6 L7.8 11.6 L14 11.4 Z" fill="${m.colour}" stroke="#fbf6ec" stroke-width="1.4" stroke-linejoin="round"${agent ? ' stroke-dasharray="3 2"' : ""}/>`;
+        const lx = flipLabel ? -(width + 6) : c.touch ? 16 : 15;
+        e.g.innerHTML = `${shape}<g class="cursor-label" transform="translate(${lx} ${c.touch ? -10 : 20})">
+          <rect class="cursor-tag${agent ? " agent" : ""}" x="0" y="-13" rx="4" height="20" width="${width}" fill="${m.colour}"/>
+          <text x="7" y="2"></text></g>`;
+        e.g.querySelector("text").textContent = label;
+        e.label = e.g.querySelector(".cursor-label");
+      }
+      // glide: most of the way each frame, snapping when it's close
+      const ease = UI.motion ? 0.35 : 1;
+      e.x += (c.x - e.x) * ease;
+      e.y += (c.y - e.y) * ease;
+      if (Math.abs(c.x - e.x) < 0.5) e.x = c.x;
+      if (Math.abs(c.y - e.y) < 0.5) e.y = c.y;
+      e.g.setAttribute("transform", `translate(${e.x.toFixed(1)} ${e.y.toFixed(1)}) scale(${size.toFixed(4)})`);
+      e.g.setAttribute("opacity", fade.toFixed(2));
+      e.label.setAttribute("opacity", labelOn ? "1" : "0");
     }
   }
-  if (g.dataset.html !== out) {
-    g.dataset.html = out;
-    g.innerHTML = out;
+  for (const [pid, e] of cursorEls) {
+    if (seen.has(pid)) continue;
+    e.g.remove();
+    cursorEls.delete(pid);
   }
 }
 
@@ -2405,9 +2434,9 @@ function frame(t) {
   animate(st);
   tickTour(t);
   if (S.offers.size) renderBubbles();
+  if (UI.cursors.size || cursorEls.size) renderCursors();
   if (t - lastCursorFrame > 100) {
     lastCursorFrame = t;
-    if (UI.cursors.size) renderCursors();
     if (UI.highlight) renderHighlight();
   }
   if (t - lastSecond > 500) {

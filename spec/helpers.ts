@@ -174,3 +174,37 @@ export async function waitUntil(fn: () => Promise<boolean>, timeout = 10_000): P
   }
   throw new Error("condition never became true");
 }
+
+/** A presence socket for a visitor, with the browser's Origin unless told otherwise. */
+export async function openSocket(
+  v: Visitor,
+  opts: { origin?: string | null; cookie?: string } = {},
+): Promise<{ ws: import("ws").WebSocket; messages: any[]; closed: Promise<number> }> {
+  const { WebSocket } = await import("ws");
+  const url = v.base.replace(/^http/, "ws") + "/api/presence";
+  const headers: Record<string, string> = {};
+  const cookie = opts.cookie ?? v.cookie;
+  if (cookie) headers.cookie = cookie;
+  if (opts.origin !== null) headers.origin = opts.origin ?? v.base;
+  const ws = new WebSocket(url, { headers });
+  const messages: any[] = [];
+  ws.on("message", (d) => messages.push(JSON.parse(d.toString())));
+  const closed = new Promise<number>((resolve) => ws.on("close", (code) => resolve(code)));
+  await new Promise<void>((resolve, reject) => {
+    ws.once("open", () => resolve());
+    ws.once("unexpected-response", (_req, res) => reject(new Error(`refused ${res.statusCode}`)));
+    ws.once("error", reject);
+  });
+  return { ws, messages, closed };
+}
+
+/** Wait until `pred` finds something in a growing list. */
+export async function waitForItem<T>(list: T[], pred: (x: T) => boolean, timeout = 3000): Promise<T> {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    const hit = list.find(pred);
+    if (hit) return hit;
+    await sleep(10);
+  }
+  throw new Error("timed out waiting for an item");
+}

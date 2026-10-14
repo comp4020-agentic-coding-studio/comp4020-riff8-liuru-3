@@ -342,11 +342,35 @@ let checkTimer: NodeJS.Timeout | undefined;
 let busy = false;
 let lastAct = 0;
 let cursorShown = false;
+let cursorAt: { x: number; y: number } | undefined;
 
 function hideCursor(pid: string) {
   if (!cursorShown) return;
   cursorShown = false;
+  cursorAt = undefined;
   serverCursor("leave", pid);
+}
+
+/** Move the companion's cursor to `to` along an eased arc over `ms`, so people see it coming. */
+async function glide(to: Cursor, ms: number): Promise<void> {
+  const from = cursorAt ?? { x: to.x + rand(-160, 160), y: to.y + rand(80, 200) };
+  const steps = Math.max(1, Math.round(ms / 80));
+  // a slight sideways bow, like a hand rather than a ruler
+  const bow = rand(-0.18, 0.18) * Math.hypot(to.x - from.x, to.y - from.y);
+  for (let i = 1; i <= steps; i++) {
+    const k = i / steps;
+    const e = 0.5 - Math.cos(Math.PI * k) / 2;
+    const arc = Math.sin(Math.PI * k) * bow;
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const x = from.x + dx * e + (-dy / len) * arc;
+    const y = from.y + dy * e + (dx / len) * arc;
+    serverCursor({ ...to, x: Math.round(x), y: Math.round(y) }, to.pid);
+    cursorShown = true;
+    await sleep(ms / steps);
+  }
+  cursorAt = { x: to.x, y: to.y };
 }
 
 function scheduleAct() {
@@ -375,9 +399,8 @@ async function turn() {
       return;
     }
     // glide there first, so people can see what it's about to do
-    serverCursor(cursorFor(choice, s), agent.pid);
-    cursorShown = true;
-    await sleep(COMPANION_TIMING.glide);
+    await glide(cursorFor(choice, s), COMPANION_TIMING.glide);
+    await sleep(250);
     if (!game.companionNow() || humans() === 0) return;
     const result = commit(agent, choice) as { leaseExpiresAt?: number } | undefined;
     lastAct = Date.now();
@@ -399,8 +422,7 @@ async function setDown(agent: game.Participant) {
     return { t, score: score(WEIGHTS, feats({ ...toModel(obj), ...t }, s)) };
   });
   const best = sample(spots, WEIGHTS.temperature)!;
-  serverCursor({ pid: s.me, ...best.t, act: "receive", motif: obj.motif }, agent.pid);
-  await sleep(Math.min(COMPANION_TIMING.glide, game.TIMING.lease / 4));
+  await glide({ pid: s.me, ...best.t, act: "receive", motif: obj.motif }, Math.min(COMPANION_TIMING.glide, game.TIMING.lease / 4));
   commit(agent, { kind: "receive", label: `放下 set down ${obj.motif}`, score: 0, at: best.t, run: (p, id) => game.placeClaimed(p, { actionId: id, offerId: held.id, ...best.t }) });
 }
 
@@ -421,6 +443,7 @@ function check() {
     const run = (p: game.Participant, id: string) => (accept ? game.accept(p, { actionId: id, proposalId: pr.id }) : game.decline(p, { actionId: id, proposalId: pr.id }));
     serverCursor({ pid: s.me, x: Math.round(pr.transform.x), y: Math.round(pr.transform.y), act: "" }, agent.pid);
     cursorShown = true;
+    cursorAt = { x: pr.transform.x, y: pr.transform.y };
     if (commit(agent, { kind, label: `${accept ? "接受" : "婉拒"} ${kind} a ${pr.kind}`, score: 0, at: pr.transform, run })) stats.answered++;
   }
   if (Date.now() - lastAct > 12_000) hideCursor(agent.pid);
