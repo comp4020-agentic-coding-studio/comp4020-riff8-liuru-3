@@ -1,9 +1,12 @@
 import { randomBytes } from "node:crypto";
 import { db } from "./db.ts";
 import {
+  AGENT_MARK,
   cleanTransform,
   INTENTS,
+  LEGACY_SCENE,
   LIMITS,
+  MARKS,
   MOTIF_BY_ID,
   MOTIFS,
   PROMPTS,
@@ -55,9 +58,10 @@ const fail = (status: number, code: string, message: string): never => {
 export interface Participant {
   id: number;
   pid: string;
+  agent?: boolean;
 }
 
-interface RoundRow {
+export interface RoundRow {
   id: number;
   prompt_index: number;
   seed: number;
@@ -70,6 +74,18 @@ interface RoundRow {
   compose_closed: number;
   status: string;
   announced_phase: string;
+  scene_w: number | null;
+  scene_h: number | null;
+}
+
+export interface Scene {
+  width: number;
+  height: number;
+}
+
+/** The size a round was painted at: rounds from before the resize have none stored. */
+export function sceneOf(r: { scene_w: number | null; scene_h: number | null } | undefined): Scene {
+  return r?.scene_w && r.scene_h ? { width: r.scene_w, height: r.scene_h } : LEGACY_SCENE;
 }
 
 interface ObjectRow {
@@ -162,10 +178,11 @@ export interface GameEvent {
 
 // ---------------------------------------------------------------- identity
 
-const pidCache = new Map<number, string>();
+const pidCache = new Map<number, { pid: string; agent: boolean }>();
 
+/** The participant behind a visitor cookie, created on first sight. Always a person. */
 export function participantFor(token: string): Participant {
-  const row = db.prepare("SELECT id, pid FROM participants WHERE token = ?").get(token) as
+  const row = db.prepare("SELECT id, pid FROM participants WHERE token = ? AND agent = 0").get(token) as
     | Participant
     | undefined;
   if (row) return row;
@@ -176,13 +193,40 @@ export function participantFor(token: string): Participant {
   return { id: Number(info.lastInsertRowid), pid };
 }
 
-function pidOf(id: number): string {
-  let pid = pidCache.get(id);
-  if (!pid) {
-    pid = (db.prepare("SELECT pid FROM participants WHERE id = ?").get(id) as { pid: string }).pid;
-    pidCache.set(id, pid);
+/** The participant behind a cookie, only if it already exists (no row is created). */
+export function existingParticipant(token: string): Participant | undefined {
+  return db.prepare("SELECT id, pid FROM participants WHERE token = ? AND agent = 0").get(token) as
+    | Participant
+    | undefined;
+}
+
+// The companion's identity lives only in the server. Its token can never be a
+// visitor cookie: cookies are UUIDs, and this one has a colon in it.
+const AGENT_TOKEN = "agent:huaban";
+export function agentParticipant(): Participant {
+  const row = db.prepare("SELECT id, pid FROM participants WHERE token = ?").get(AGENT_TOKEN) as
+    | Participant
+    | undefined;
+  if (row) return { ...row, agent: true };
+  const pid = `ai${randomBytes(5).toString("hex")}`;
+  const info = db
+    .prepare("INSERT INTO participants (token, pid, created_at, agent) VALUES (?, ?, ?, 1)")
+    .run(AGENT_TOKEN, pid, Date.now());
+  return { id: Number(info.lastInsertRowid), pid, agent: true };
+}
+
+function who(id: number): { pid: string; agent: boolean } {
+  let w = pidCache.get(id);
+  if (!w) {
+    const row = db.prepare("SELECT pid, agent FROM participants WHERE id = ?").get(id) as { pid: string; agent: number };
+    w = { pid: row.pid, agent: row.agent === 1 };
+    pidCache.set(id, w);
   }
-  return pid;
+  return w;
+}
+
+function pidOf(id: number): string {
+  return who(id).pid;
 }
 
 // ---------------------------------------------------------------- events
@@ -194,7 +238,7 @@ export function onEvents(fn: (events: GameEvent[]) => void): void {
   broadcaster = fn;
 }
 
-function emit(roundId: number | null, type: string, payload: unknown, now: number): void {
+export function emit(roundId: number | null, type: string, payload: unknown, now: number): void {
   const info = db
     .prepare("INSERT INTO events (round_id, type, payload, created_at) VALUES (?, ?, ?, ?)")
     .run(roundId, type, JSON.stringify(payload), now);
@@ -216,7 +260,9 @@ export function cursor(): number {
 
 // A transaction whose events are broadcast only once it commits; a thrown
 // GameError rolls everything back, events included.
+let dryDepth = 0;
 function atomically<T>(fn: () => T): T {
+  if (dryDepth > 0) return db.transaction(fn)();
   try {
     const result = db.transaction(fn)();
     flush();
@@ -227,12 +273,43 @@ function atomically<T>(fn: () => T): T {
   }
 }
 
+class Rollback extends Error {}
+
+/**
+ * Would the server accept this action right now? Runs the real action (the
+ * same validation and writes an HTTP request would) inside a transaction that
+ * is always rolled back, with nothing broadcast. The companion filters its
+ * candidate moves through this, so it can only choose what a person could do.
+ */
+export function wouldAccept(fn: () => unknown): { ok: true } | { ok: false; code: string } {
+  const mark = pending.length;
+  dryDepth++;
+  try {
+    db.transaction(() => {
+      const result = fn() as { ok?: boolean; code?: string } | undefined;
+      if (result && result.ok === false) throw new GameError(409, result.code ?? "refused", "refused");
+      throw new Rollback();
+    })();
+    return { ok: true };
+  } catch (err) {
+    if (err instanceof Rollback) return { ok: true };
+    if (err instanceof GameError) return { ok: false, code: err.code };
+    throw err;
+  } finally {
+    dryDepth--;
+    pending = pending.slice(0, mark);
+  }
+}
+
+export const isDryRun = (): boolean => dryDepth > 0;
+
 // ---------------------------------------------------------------- shadows
 
 let shadowSeq = 0;
 let shadows: Shadow[] = [];
 
 function castShadow(o: ObjectRow, now: number): Shadow {
+  // a dry run must leave no trace outside the rolled-back transaction
   const s: Shadow = {
     id: ++shadowSeq,
     motif: o.motif,
@@ -245,14 +322,14 @@ function castShadow(o: ObjectRow, now: number): Shadow {
     createdAt: now,
     expiresAt: now + TIMING.shadow,
   };
-  shadows = [...shadows.filter((x) => x.expiresAt > now), s].slice(-24);
+  if (dryDepth === 0) shadows = [...shadows.filter((x) => x.expiresAt > now), s].slice(-24);
   return s;
 }
 
 // ---------------------------------------------------------------- rows
 
 const currentRoundStmt = db.prepare("SELECT * FROM rounds ORDER BY id DESC LIMIT 1");
-function currentRound(): RoundRow | undefined {
+export function currentRound(): RoundRow | undefined {
   return currentRoundStmt.get() as RoundRow | undefined;
 }
 
@@ -265,7 +342,7 @@ function roundTimes(r: RoundRow) {
   };
 }
 
-function phaseOf(r: RoundRow | undefined, now: number): string {
+export function phaseOf(r: RoundRow | undefined, now: number): string {
   return phaseAt(r ? roundTimes(r) : undefined, now);
 }
 
@@ -308,6 +385,7 @@ function publicObject(o: ObjectRow) {
 function publicPlayer(p: PlayerRow) {
   return {
     pid: pidOf(p.participant_id),
+    agent: who(p.participant_id).agent,
     mark: p.mark,
     palette: JSON.parse(p.palette) as string[],
     rerollsUsed: p.rerolls_used,
@@ -480,12 +558,20 @@ function ensurePlayer(r: RoundRow, p: Participant, now: number): PlayerRow | und
   const count = (
     db.prepare("SELECT COUNT(*) AS n FROM round_players WHERE round_id = ?").get(r.id) as { n: number }
   ).n;
+  // People take the twelve ink marks in join order; the companion always
+  // wears its own (机), so it can't be mistaken for a person.
+  const humans = (
+    db
+      .prepare("SELECT COUNT(*) AS n FROM round_players rp JOIN participants p ON p.id = rp.participant_id WHERE rp.round_id = ? AND p.agent = 0")
+      .get(r.id) as { n: number }
+  ).n;
+  const mark = p.agent ? AGENT_MARK : humans % MARKS.length;
   // Late in the round placement is closed, so a newcomer gets no palette but
   // can still borrow, catch bubbles and answer openings.
   const palette = phase === "compose" ? deal(r.id, r.seed, count) : [];
   db.prepare(
     "INSERT INTO round_players (round_id, participant_id, mark, palette, joined_at) VALUES (?, ?, ?, ?, ?)",
-  ).run(r.id, p.id, count % 12, JSON.stringify(palette), now);
+  ).run(r.id, p.id, mark, JSON.stringify(palette), now);
   patch(r.id, now, "joined", { players: [p.id] });
   return getPlayer(r.id, p.id);
 }
@@ -527,6 +613,7 @@ export function snapshot(p: Participant, online: Set<string>) {
           ...roundTimes(r),
           lightningAt: r.lightning_at,
           archived: r.status === "archived",
+          scene: sceneOf(r),
         }
       : null,
     players: r
@@ -564,6 +651,7 @@ export function snapshot(p: Participant, online: Set<string>) {
       : [],
     shadows: shadows.filter((s) => s.expiresAt > now),
     lastArchive: lastArchive?.round_id ?? null,
+    companion: showScene ? publicCompanion(presentCompanion(r.id)) : null,
     nextPrompt: PROMPTS[nextPromptIndex()],
     timing: { proposal: TIMING.proposal, lease: TIMING.lease, shadow: TIMING.shadow, dew: TIMING.dew },
   };
@@ -645,6 +733,9 @@ function archiveRound(r: RoundRow, now: number): void {
   // The archive now holds what the replay needs; the round's raw event log
   // is scaffolding and would otherwise grow without bound.
   db.prepare("DELETE FROM events WHERE round_id = ?").run(r.id);
+  // Chat and other room-wide events carry no round; an hour is far longer than
+  // any client needs to catch up before it resyncs from a snapshot instead.
+  db.prepare("DELETE FROM events WHERE round_id IS NULL AND created_at < ?").run(now - 3_600_000);
   db.prepare("DELETE FROM actions WHERE created_at < ?").run(now - 86_400_000);
 }
 
@@ -694,6 +785,7 @@ function reconcileIn(now: number): void {
       .prepare("SELECT * FROM offers WHERE round_id = ? AND status IN ('floating','claimed')")
       .all(r.id) as OfferRow[];
     for (const o of live) returnOffer(o, "returned", now);
+    endCompanion(r, now, null);
     archiveRound(r, now);
   }
   if (phase !== r.announced_phase && phase !== "compose") {
@@ -801,7 +893,8 @@ function capacity(r: RoundRow, custodian: number): void {
   handsCapacity(r, custodian);
 }
 
-function inScene(x: unknown, y: unknown): { x: number; y: number } {
+function inScene(r: RoundRow, x: unknown, y: unknown): { x: number; y: number } {
+  const scene = sceneOf(r);
   if (
     typeof x !== "number" ||
     typeof y !== "number" ||
@@ -809,8 +902,8 @@ function inScene(x: unknown, y: unknown): { x: number; y: number } {
     !Number.isFinite(y) ||
     x < 0 ||
     y < 0 ||
-    x > SCENE.width ||
-    y > SCENE.height
+    x > scene.width ||
+    y > scene.height
   ) {
     fail(400, "position", "位置不在画卷上 / That position is off the scroll.");
   }
@@ -854,6 +947,7 @@ function nextPromptIndex(): number {
 }
 
 export function startRound(p: Participant, body: Body) {
+  if (p.agent) fail(403, "agent", "画伴不开新梦 / The companion never starts a dream.");
   return act(p, body.actionId, (now, r) => {
     const phase = phaseOf(r, now);
     if (r && phase !== "finished") return { roundId: r.id };
@@ -865,9 +959,9 @@ export function startRound(p: Participant, body: Body) {
     const dissolveEnd = revealEnd + TIMING.dissolve;
     const info = db
       .prepare(
-        "INSERT INTO rounds (prompt_index, seed, started_at, compose_end, refine_end, reveal_end, dissolve_end, lightning_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO rounds (prompt_index, seed, started_at, compose_end, refine_end, reveal_end, dissolve_end, lightning_at, scene_w, scene_h) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       )
-      .run(promptIndex, seed, now, composeEnd, refineEnd, revealEnd, dissolveEnd, now + Math.min(TIMING.lightning, TIMING.compose - 1000));
+      .run(promptIndex, seed, now, composeEnd, refineEnd, revealEnd, dissolveEnd, now + Math.min(TIMING.lightning, TIMING.compose - 1000), SCENE.width, SCENE.height);
     const roundId = Number(info.lastInsertRowid);
     emit(roundId, "round-started", { round: roundId }, now);
     ensurePlayer(currentRound()!, p, now);
@@ -909,7 +1003,7 @@ export function place(p: Participant, body: Body) {
     if (!(JSON.parse(player.palette) as string[]).includes(motif as string)) {
       fail(403, "not-yours", "这不在你的素材匣里，可向别人借 / Not in your tray: ask someone who has it.");
     }
-    const t = cleanTransform(body, motif);
+    const t = cleanTransform(body, motif, sceneOf(r));
     if (!t) fail(400, "transform", "位置或大小超出范围 / Position or size out of range.");
     capacity(r, p.id);
     const z = (db.prepare("SELECT COALESCE(MAX(z), 0) + 1 AS z FROM objects WHERE round_id = ?").get(r.id) as { z: number }).z;
@@ -936,7 +1030,7 @@ export function update(p: Participant, body: Body) {
   return act(p, body.actionId, (now, r) => {
     r = requirePhase(r, now, ["compose", "refine"]);
     const o = custodianObject(r, p, body);
-    const t = cleanTransform(body, o.motif);
+    const t = cleanTransform(body, o.motif, sceneOf(r));
     if (!t) fail(400, "transform", "位置或大小超出范围 / Position or size out of range.");
     db.prepare(
       "UPDATE objects SET x = ?, y = ?, scale = ?, rotation = ?, flip = ?, ink = ?, depth = ?, version = version + 1 WHERE id = ?",
@@ -990,7 +1084,7 @@ export function invite(p: Participant, body: Body) {
   return act(p, body.actionId, (now, r) => {
     r = requirePhase(r, now, ["compose"]);
     requirePlayer(r, p, now);
-    const { x, y } = inScene(body.x, body.y);
+    const { x, y } = inScene(r, body.x, body.y);
     const intent = body.intent;
     if (typeof intent !== "string" || !Object.hasOwn(INTENTS, intent)) fail(400, "intent", "未知的意图 / Unknown intention.");
     const open = (
@@ -1034,7 +1128,7 @@ export function respond(p: Participant, body: Body) {
     if (!(JSON.parse(player.palette) as string[]).includes(motif as string)) {
       fail(403, "not-yours", "只能用自己素材匣里的 / Answer with a motif from your own tray.");
     }
-    const t = cleanTransform({ x: i.x, y: i.y, ...(body as object) }, motif);
+    const t = cleanTransform({ x: i.x, y: i.y, ...(body as object) }, motif, sceneOf(r));
     if (!t) fail(400, "transform", "位置或大小超出范围 / Position or size out of range.");
     if (Math.hypot(t!.x - i.x, t!.y - i.y) > 160) {
       fail(400, "too-far", "回应要放在留白附近 / An answer belongs near the opening it answers.");
@@ -1076,6 +1170,7 @@ export function borrow(p: Participant, body: Body) {
     const t = cleanTransform(
       { scale: o.scale, rotation: o.rotation, flip: !!o.flip, ink: o.ink, depth: o.depth, ...(body as object) },
       o.motif,
+      sceneOf(r),
     );
     if (!t) fail(400, "transform", "位置或大小超出范围 / Position or size out of range.");
     const info = db
@@ -1226,7 +1321,7 @@ export function placeClaimed(p: Participant, body: Body) {
     const of = getOffer(r, body.offerId);
     if (of.status !== "claimed" || of.claimant !== p.id) fail(409, "lease", "接住的时限已过 / The placement window has passed.");
     const obj = getObject(of.object_id)!;
-    const { x, y } = inScene(body.x, body.y);
+    const { x, y } = inScene(r, body.x, body.y);
     db.prepare(
       "UPDATE objects SET x = ?, y = ?, custodian = ?, status = 'placed', version = version + 1 WHERE id = ?",
     ).run(x, y, p.id, obj.id);
@@ -1258,7 +1353,7 @@ export function dew(p: Participant, body: Body) {
     r = requirePhase(r, now, ["compose", "refine"]);
     const player = requirePlayer(r, p, now);
     if (player.dew_used >= LIMITS.dew) fail(409, "dew", "本梦的两滴露已用 / Both drops of dew are used.");
-    const { x, y } = inScene(body.x, body.y);
+    const { x, y } = inScene(r, body.x, body.y);
     const info = db
       .prepare("INSERT INTO dews (round_id, participant_id, x, y, created_at) VALUES (?, ?, ?, ?, ?)")
       .run(r.id, p.id, x, y, now);
@@ -1272,6 +1367,93 @@ export function dew(p: Participant, body: Body) {
   });
 }
 
+// ---------------------------------------------------------------- companion
+
+interface CompanionRow {
+  id: number;
+  round_id: number;
+  participant_id: number;
+  invited_by: number;
+  status: string;
+}
+
+function presentCompanion(roundId: number): CompanionRow | undefined {
+  return db.prepare("SELECT * FROM companions WHERE round_id = ? AND status = 'present'").get(roundId) as
+    | CompanionRow
+    | undefined;
+}
+
+function publicCompanion(c: CompanionRow | undefined) {
+  return c ? { pid: pidOf(c.participant_id), invitedBy: pidOf(c.invited_by) } : null;
+}
+
+/** The companion present in the current round, if any (for the server's loop). */
+export function companionNow(): { roundId: number; participant: Participant } | undefined {
+  const r = currentRound();
+  const c = r && presentCompanion(r.id);
+  return c ? { roundId: r!.id, participant: { id: c.participant_id, pid: pidOf(c.participant_id), agent: true } } : undefined;
+}
+
+// The companion leaves with the round (by = null), or when someone dismisses
+// it. Its pending requests go with it; its objects stay in the picture.
+function endCompanion(r: RoundRow, now: number, by: number | null): boolean {
+  const c = presentCompanion(r.id);
+  if (!c) return false;
+  db.prepare("UPDATE companions SET status = 'left', ended_by = ?, ended_at = ? WHERE id = ?").run(by, now, c.id);
+  const mine = db
+    .prepare("SELECT id FROM proposals WHERE round_id = ? AND proposer = ? AND status = 'pending'")
+    .all(r.id, c.participant_id) as { id: number }[];
+  db.prepare("UPDATE proposals SET status = 'cancelled' WHERE round_id = ? AND proposer = ? AND status = 'pending'").run(
+    r.id,
+    c.participant_id,
+  );
+  const held = db
+    .prepare("SELECT * FROM offers WHERE round_id = ? AND claimant = ? AND status = 'claimed'")
+    .all(r.id, c.participant_id) as OfferRow[];
+  for (const o of held) returnOffer(o, "returned", now);
+  emit(r.id, "companion", { round: r.id, companion: null, left: pidOf(c.participant_id), by: by === null ? null : pidOf(by) }, now);
+  if (mine.length) patch(r.id, now, "proposal-cancelled", { proposals: mine.map((m) => m.id) });
+  return true;
+}
+
+export function inviteCompanion(p: Participant, body: Body) {
+  if (p.agent) fail(403, "agent", "画伴不能邀请画伴 / The companion can't invite itself.");
+  return act(p, body.actionId, (now, r) => {
+    r = requirePhase(r, now, ["compose", "refine"]);
+    requirePlayer(r, p, now);
+    const existing = presentCompanion(r.id);
+    if (existing) return { ok: true, companion: publicCompanion(existing) };
+    const agent = agentParticipant();
+    db.prepare("INSERT INTO companions (round_id, participant_id, invited_by, created_at) VALUES (?, ?, ?, ?)").run(
+      r.id,
+      agent.id,
+      p.id,
+      now,
+    );
+    ensurePlayer(r, agent, now);
+    const c = publicCompanion(presentCompanion(r.id));
+    emit(r.id, "companion", { round: r.id, companion: c, by: p.pid }, now);
+    return { ok: true, companion: c };
+  });
+}
+
+export function dismissCompanion(p: Participant, body: Body) {
+  if (p.agent) fail(403, "agent", "画伴不能替人送客 / The companion can't dismiss itself.");
+  return act(p, body.actionId, (now, r) => {
+    r = requirePhase(r, now, ["compose", "refine"]);
+    endCompanion(r, now, p.id);
+    return { ok: true };
+  });
+}
+
+/** The companion leaving on its own (last person gone, or nothing left to do). */
+export function companionLeaves(agent: Participant, body: Body) {
+  return act(agent, body.actionId, (now, r) => {
+    if (r) endCompanion(r, now, null);
+    return { ok: true };
+  });
+}
+
 // ---------------------------------------------------------------- archive
 
 export interface ArchiveRow {
@@ -1280,15 +1462,22 @@ export interface ArchiveRow {
   scene: string;
   keyframes: string;
   created_at: number;
+  // from the round, not the archive row (which is never rewritten)
+  scene_w: number | null;
+  scene_h: number | null;
 }
 
 export function archives(page: number, perPage = 12): { rows: ArchiveRow[]; more: boolean } {
   const rows = db
-    .prepare("SELECT * FROM archives ORDER BY round_id DESC LIMIT ? OFFSET ?")
+    .prepare(
+      "SELECT a.*, r.scene_w, r.scene_h FROM archives a JOIN rounds r ON r.id = a.round_id ORDER BY a.round_id DESC LIMIT ? OFFSET ?",
+    )
     .all(perPage + 1, page * perPage) as ArchiveRow[];
   return { rows: rows.slice(0, perPage), more: rows.length > perPage };
 }
 
 export function archive(id: number): ArchiveRow | undefined {
-  return db.prepare("SELECT * FROM archives WHERE round_id = ?").get(id) as ArchiveRow | undefined;
+  return db
+    .prepare("SELECT a.*, r.scene_w, r.scene_h FROM archives a JOIN rounds r ON r.id = a.round_id WHERE a.round_id = ?")
+    .get(id) as ArchiveRow | undefined;
 }

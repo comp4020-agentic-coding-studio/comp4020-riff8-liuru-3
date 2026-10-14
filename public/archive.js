@@ -26,9 +26,10 @@ next.addEventListener("click", () => {
   show();
 });
 
+// only the long 2400-wide scrolls saved before the resize offer full size
 const view = document.getElementById("archive-view");
 const fit = document.getElementById("fit-toggle");
-fit.addEventListener("click", () => {
+fit?.addEventListener("click", () => {
   const on = view.classList.toggle("fit");
   fit.setAttribute("aria-pressed", String(on));
 });

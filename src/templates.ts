@@ -1,5 +1,6 @@
-import { MARKS, PROMPTS, SCENE, sceneDefs, sceneMarkup, paperMarkup } from "../public/shared.js";
-import type { ArchiveRow } from "./game.ts";
+import { AGENT_MARK, markFor, paperMarkup, PROMPTS, SCENE, sceneDefs, sceneMarkup } from "../public/shared.js";
+import type { ChatMessage } from "./chat.ts";
+import { type ArchiveRow, sceneOf, type Scene } from "./game.ts";
 
 export function escapeHtml(s: string): string {
   return s
@@ -46,52 +47,28 @@ ${body}
 }
 
 export function renderApp(): string {
+  // The scene's viewBox is set per round by the client; it starts at the
+  // current size so the first paint has the right proportions.
   return `<!doctype html>
 <html lang="zh-Hans">
   <head>
-    ${head("六如 · 共梦长卷 — A Shared Dream Scroll")}
+    ${head("六如 · 共梦图 — A Shared Dream Picture")}
     <link rel="stylesheet" href="/static/app.css" />
     <link rel="modulepreload" href="/static/shared.js" />
+    <link rel="modulepreload" href="/static/motion.js" />
   </head>
   <body class="app loading">
-    <a class="skip" href="#scroll">跳到画卷 <span lang="en">Skip to the scroll</span></a>
-    <header class="bar">
-      <h1 class="brand-h"><a class="brand" href="/">
-        <img src="/static/motifs/seal.svg" alt="六如" width="34" height="34" />
-        <span class="title"><span class="zh">共梦长卷</span><span class="en" lang="en">A Shared Dream Scroll</span></span>
-      </a></h1>
-      <div class="dream" aria-live="off">
-        <p class="prompt"><span id="prompt-zh" class="zh">……</span> <span id="prompt-en" class="en" lang="en"></span></p>
-        <p class="phase-line"><span id="phase">连接中 <span lang="en">Connecting</span></span> <span id="clock" class="clock"></span></p>
-      </div>
-      <nav class="links" aria-label="站内 Site">
-        <ul id="marks" class="marks" aria-label="此刻在场 Here now"></ul>
-        <span id="conn" class="conn" title="连接 Connection"><span class="dot"></span><span id="conn-text" class="visually-hidden">连接中</span></span>
-        <button id="share" type="button">分享 <span lang="en">Share</span></button>
-        <a href="/how/">玩法 <span lang="en">How to play</span></a>
-        <a href="/dreams/">梦痕 <span lang="en">Archive</span></a>
-        <a href="/readme/">关于 <span lang="en">About</span></a>
-        <button id="motion" type="button" aria-pressed="true">动 <span lang="en">Motion</span></button>
-      </nav>
-    </header>
+    <a class="skip" href="#scroll">跳到画面 <span lang="en">Skip to the picture</span></a>
 
-    <main class="stage">
-      <div class="rail" role="toolbar" aria-label="工具 Tools">
-        <button type="button" class="tool" data-tool="select" aria-pressed="true"><span class="zh">选</span><span class="en" lang="en">Place / select</span></button>
-        <button type="button" class="tool" data-tool="invite" aria-pressed="false"><span class="zh">邀</span><span class="en" lang="en">Leave an opening</span></button>
-        <button type="button" class="tool" data-tool="dew" aria-pressed="false"><span class="zh">露</span><span class="en" lang="en">Dew <span id="dew-left"></span></span></button>
-        <button type="button" class="tool" data-tool="pan" aria-pressed="false"><span class="zh">移</span><span class="en" lang="en">Pan</span></button>
-        <span class="rail-gap"></span>
-        <button type="button" id="zoom-in" class="tool small" aria-label="放大 Zoom in">＋</button>
-        <button type="button" id="zoom-out" class="tool small" aria-label="缩小 Zoom out">－</button>
-        <button type="button" id="fit" class="tool small"><span class="zh">全</span><span class="en" lang="en">Fit</span></button>
-      </div>
-
-      <div class="scroll-wrap" id="scroll-wrap">
-        <svg id="scroll" class="scroll" tabindex="0" role="img" aria-roledescription="画卷 scroll" aria-label="共梦长卷：共享画面 The shared scroll" preserveAspectRatio="none" viewBox="0 0 ${SCENE.width} ${SCENE.height}">
-          <defs id="defs">${sceneDefs("s")}</defs>
+    <main class="stage" id="stage">
+      <svg id="scroll" class="scroll" tabindex="0" role="img" aria-roledescription="画面 picture" aria-label="共梦图：共享画面 The shared picture" preserveAspectRatio="none" viewBox="0 0 ${SCENE.width} ${SCENE.height}">
+        <defs id="defs">${sceneDefs("s")}<clipPath id="s-scene-clip"><rect id="scene-clip-rect" width="${SCENE.width}" height="${SCENE.height}"/></clipPath></defs>
+        <g id="world">
+          <rect id="bleed" class="bleed" x="-2000" y="-2000" width="${SCENE.width + 4000}" height="${SCENE.height + 4000}"/>
+          <rect id="bleed-grain" x="-2000" y="-2000" width="${SCENE.width + 4000}" height="${SCENE.height + 4000}" filter="url(#s-grain)"/>
           <g id="paper">${paperMarkup("s")}</g>
-          <g id="art">
+          <rect id="edge" class="edge" width="${SCENE.width}" height="${SCENE.height}"/>
+          <g id="art" clip-path="url(#s-scene-clip)">
             <g id="glows"></g>
             <g id="layer-0"></g>
             <g id="layer-1"></g>
@@ -105,65 +82,117 @@ export function renderApp(): string {
           <g id="invites"></g>
           <g id="ghosts"></g>
           <g id="bubbles"></g>
+          <g id="highlight"></g>
           <g id="selection"></g>
           <rect id="sky" width="${SCENE.width}" height="${SCENE.height}" fill="url(#s-sky)" pointer-events="none" opacity="0"/>
-        </svg>
-        <div id="overlay" class="overlay" hidden></div>
-        <div id="modebar" class="modebar" hidden></div>
-        <div id="guide" class="guide" hidden>
-          <h2>入梦三步 <span lang="en">Three steps into the dream</span></h2>
-          <ol>
-            <li><strong>读梦</strong> 读上方的一句梦。<span lang="en">Read the dream at the top.</span></li>
-            <li><strong>布景</strong> 从下方素材匣选一件，点在画上。<span lang="en">Pick a motif from your tray below and tap the scroll to place it.</span></li>
-            <li><strong>成全</strong> 借别人的景、接一个泡、回应一处留白。<span lang="en">Complete someone else's scene: borrow a view, catch a bubble, answer an opening.</span></li>
-          </ol>
-          <button type="button" id="guide-close">好 <span lang="en">Got it</span></button>
+          <g id="cursors" aria-hidden="true"></g>
+        </g>
+      </svg>
+
+      <header class="bar float">
+        <h1 class="brand-h"><a class="brand" href="/">
+          <img src="/static/motifs/seal.svg" alt="六如" width="30" height="30" />
+          <span class="title"><span class="zh">共梦图</span><span class="en" lang="en">A Shared Dream</span></span>
+        </a></h1>
+        <div class="dream" aria-live="off">
+          <p class="prompt"><span id="prompt-zh" class="zh">……</span> <span id="prompt-en" class="en" lang="en"></span></p>
+          <p class="phase-line"><span id="phase">连接中 <span lang="en">Connecting</span></span> <span id="clock" class="clock"></span></p>
         </div>
+        <nav class="links" aria-label="站内 Site">
+          <ul id="marks" class="marks" aria-label="此刻在场 Here now"></ul>
+          <span id="conn" class="conn" title="连接 Connection"><span class="dot"></span><span id="conn-text" class="visually-hidden">连接中</span></span>
+          <button id="companion" type="button" class="companion-btn" hidden>邀请画伴 <span lang="en">Invite a companion</span></button>
+          <details class="menu">
+            <summary aria-label="更多 More">⋯ <span lang="en" class="more-label">More</span></summary>
+            <div class="menu-body">
+              <button id="share" type="button">分享 <span lang="en">Share</span></button>
+              <button id="fullscreen" type="button" aria-pressed="false" hidden>全屏 <span lang="en">Full screen</span></button>
+              <button id="motion" type="button" aria-pressed="true">动 <span lang="en">Motion</span></button>
+              <button id="cursors-toggle" type="button" aria-pressed="true">指针 <span lang="en">Others' pointers</span></button>
+              <a href="/how/">玩法 <span lang="en">How to play</span></a>
+              <a href="/dreams/">梦痕 <span lang="en">Archive</span></a>
+              <a href="/readme/">关于 <span lang="en">About</span></a>
+            </div>
+          </details>
+        </nav>
+      </header>
+
+      <div class="rail float" role="toolbar" aria-label="工具 Tools">
+        <button type="button" class="tool" data-tool="select" aria-pressed="true"><span class="zh">选</span><span class="en" lang="en">Place / select</span></button>
+        <button type="button" class="tool" data-tool="invite" aria-pressed="false"><span class="zh">邀</span><span class="en" lang="en">Leave an opening</span></button>
+        <button type="button" class="tool" data-tool="dew" aria-pressed="false"><span class="zh">露</span><span class="en" lang="en">Dew <span id="dew-left"></span></span></button>
       </div>
 
-      <aside class="side" aria-label="画中事 What's happening">
-        <section class="requests" aria-labelledby="req-title">
-          <h2 id="req-title">往来 <span lang="en">Requests and offers</span></h2>
-          <div id="requests"><p class="quiet">还没有往来。<span lang="en">Nothing waiting yet.</span></p></div>
-        </section>
-        <section id="inspector" class="inspector" hidden aria-labelledby="insp-title"></section>
-        <details class="objects">
-          <summary>画中景物 <span lang="en">Objects in the scene</span> <span id="obj-count"></span></summary>
-          <ul id="object-list"></ul>
-        </details>
-        <details class="similes">
-          <summary>六如在哪里 <span lang="en">Where the six similes appear</span></summary>
-          <dl>
-            <dt>梦 <span lang="en">Dream</span></dt><dd>一梦七分钟：同一句梦，同一幅画，最后散回纸上。<span lang="en">One seven-minute dream: one prompt, one picture, which fades back into paper.</span></dd>
-            <dt>幻 <span lang="en">Illusion</span></dt><dd>水边之物可“化影”，变成水中倒影。<span lang="en">An object by water can become its reflection.</span></dd>
-            <dt>泡 <span lang="en">Bubble</span></dt><dd>把一件景物放进泡里，谁先接住，归谁照看。<span lang="en">Offer an object in a bubble; whoever catches it first cares for it.</span></dd>
-            <dt>影 <span lang="en">Shadow</span></dt><dd>移走的景物在原处留下片刻淡影。<span lang="en">A moved object leaves a faint trace where it was.</span></dd>
-            <dt>露 <span lang="en">Dew</span></dt><dd>每人两滴露，让附近的墨晕开一会儿。<span lang="en">Two drops of dew each soften nearby ink for a while.</span></dd>
-            <dt>电 <span lang="en">Lightning</span></dt><dd>布景将尽时，远处一闪，风过画面，又归平静。<span lang="en">Late in Compose, a distant flash and a gust pass through, then settle.</span></dd>
-          </dl>
-        </details>
+      <div id="overlay" class="overlay" hidden></div>
+      <div id="modebar" class="modebar" hidden></div>
+      <div id="guide" class="guide float" hidden>
+        <h2>入梦三步 <span lang="en">Three steps into the dream</span></h2>
+        <ol>
+          <li><strong>读梦</strong> 读上方的一句梦。<span lang="en">Read the dream at the top.</span></li>
+          <li><strong>布景</strong> 从下方素材匣选一件，点在画上。<span lang="en">Pick a motif from your tray below and tap the picture to place it.</span></li>
+          <li><strong>成全</strong> 借别人的景、接一个泡、回应一处留白。<span lang="en">Complete someone else's scene: borrow a view, catch a bubble, answer an opening.</span></li>
+        </ol>
+        <button type="button" id="guide-close">好 <span lang="en">Got it</span></button>
+      </div>
+
+      <aside class="side float" id="side" aria-label="画中事 What's happening">
+        <button type="button" class="side-handle" id="side-handle" aria-expanded="false" aria-controls="side">往来 <span lang="en">Requests</span> <span id="req-count" class="count"></span></button>
+        <div class="side-body">
+          <section class="requests" aria-labelledby="req-title">
+            <h2 id="req-title">往来 <span lang="en">Requests and offers</span></h2>
+            <div id="requests"><p class="quiet">还没有往来。<span lang="en">Nothing waiting yet.</span></p></div>
+          </section>
+          <section id="inspector" class="inspector" hidden aria-labelledby="insp-title"></section>
+          <details class="objects">
+            <summary>画中景物 <span lang="en">Objects in the scene</span> <span id="obj-count"></span></summary>
+            <ul id="object-list"></ul>
+          </details>
+          <details class="similes">
+            <summary>六如在哪里 <span lang="en">Where the six similes appear</span></summary>
+            <dl>
+              <dt>梦 <span lang="en">Dream</span></dt><dd>一梦七分钟：同一句梦，同一幅画，最后散回纸上。<span lang="en">One seven-minute dream: one prompt, one picture, which fades back into paper.</span></dd>
+              <dt>幻 <span lang="en">Illusion</span></dt><dd>水边之物可“化影”，变成水中倒影。<span lang="en">An object by water can become its reflection.</span></dd>
+              <dt>泡 <span lang="en">Bubble</span></dt><dd>把一件景物放进泡里，谁先接住，归谁照看。<span lang="en">Offer an object in a bubble; whoever catches it first cares for it.</span></dd>
+              <dt>影 <span lang="en">Shadow</span></dt><dd>移走的景物在原处留下片刻淡影。<span lang="en">A moved object leaves a faint trace where it was.</span></dd>
+              <dt>露 <span lang="en">Dew</span></dt><dd>每人两滴露，让附近的墨晕开一会儿。<span lang="en">Two drops of dew each soften nearby ink for a while.</span></dd>
+              <dt>电 <span lang="en">Lightning</span></dt><dd>布景将尽时，远处一闪，一阵大风吹过画面，又归平静。<span lang="en">Late in Compose, a distant flash and a strong gust cross the picture, then settle.</span></dd>
+            </dl>
+          </details>
+        </div>
       </aside>
 
-      <div class="overview-wrap">
-        <svg id="overview" class="overview" viewBox="0 0 ${SCENE.width} ${SCENE.height}" preserveAspectRatio="none" aria-label="全卷缩览，点击跳转 Overview: click to jump" role="img">
-          <rect width="${SCENE.width}" height="${SCENE.height}" fill="#efe5d3"/>
-          <g id="overview-art"></g>
-          <rect id="overview-view" fill="none" stroke="#a44d3c" stroke-width="10" rx="6"/>
-        </svg>
-      </div>
-    </main>
+      <section class="chat float collapsed" id="chat" aria-labelledby="chat-title">
+        <button type="button" class="chat-toggle" id="chat-toggle" aria-expanded="false" aria-controls="chat-body"><span id="chat-title">谈 <span lang="en">Chat</span></span> <span id="chat-unread" class="count"></span></button>
+        <div class="chat-body" id="chat-body">
+          <p class="chat-note">公开，会被保存，可导出。<span lang="en">Public, kept and exportable. Plain text, up to 300 characters.</span></p>
+          <button type="button" id="chat-older" class="chat-older" hidden>更早 <span lang="en">Earlier messages</span></button>
+          <ol id="chat-log" class="chat-log" aria-live="polite" aria-relevant="additions"></ol>
+          <form id="chat-form" class="chat-form" autocomplete="off">
+            <p id="chat-about" class="chat-about" hidden></p>
+            <label class="visually-hidden" for="chat-input">说一句 Say something</label>
+            <input id="chat-input" name="text" maxlength="300" placeholder="说一句… Say something" />
+            <button type="submit">送 <span lang="en">Send</span></button>
+          </form>
+          <details class="chat-export">
+            <summary>导出 <span lang="en">Export</span></summary>
+            <p>全部 <span lang="en">All dreams</span>: <a href="/api/chat/export?format=md" download>Markdown</a> · <a href="/api/chat/export?format=txt" download>Text</a> · <a href="/api/chat/export?format=json" download>JSON</a></p>
+            <p id="chat-export-round"></p>
+          </details>
+        </div>
+      </section>
 
-    <footer class="tray" id="tray">
-      <div class="tray-head">
-        <button type="button" id="tray-toggle" aria-expanded="true" aria-controls="tray-body">素材匣 <span lang="en">Your motifs</span></button>
-        <span id="reroll-left" class="quiet"></span>
-        <button type="button" id="swap-mode" aria-pressed="false">换一格 <span lang="en">Swap one</span></button>
-        <button type="button" id="catalogue-open">全部景物 <span lang="en">All motifs</span></button>
-      </div>
-      <div id="tray-body" class="tray-body">
-        <ul id="palette" class="palette" aria-label="你的素材 Your motifs"></ul>
-      </div>
-    </footer>
+      <footer class="tray float" id="tray">
+        <div class="tray-head">
+          <button type="button" id="tray-toggle" aria-expanded="true" aria-controls="tray-body">素材匣 <span lang="en">Your motifs</span></button>
+          <span id="reroll-left" class="quiet"></span>
+          <button type="button" id="swap-mode" aria-pressed="false">换一格 <span lang="en">Swap one</span></button>
+          <button type="button" id="catalogue-open">全部景物 <span lang="en">All motifs</span></button>
+        </div>
+        <div id="tray-body" class="tray-body">
+          <ul id="palette" class="palette" aria-label="你的素材 Your motifs"></ul>
+        </div>
+      </footer>
+    </main>
 
     <dialog id="catalogue" aria-labelledby="cat-title">
       <h2 id="cat-title">全部景物 <span lang="en">All motifs</span></h2>
@@ -181,7 +210,7 @@ export function renderApp(): string {
 
     <dialog id="share-dialog" aria-labelledby="share-title">
       <h2 id="share-title">分享这场梦 <span lang="en">Share this dream</span></h2>
-      <p>把链接发给同伴，打开就在同一幅画里。<span lang="en">Send this link; whoever opens it joins the same scroll.</span></p>
+      <p>把链接发给同伴，打开就在同一幅画里。<span lang="en">Send this link; whoever opens it joins the same picture.</span></p>
       <label>链接 <span lang="en">Link</span> <input id="share-url" readonly /></label>
       <p id="share-status" class="quiet" role="status"></p>
       <form method="dialog"><button>关 <span lang="en">Close</span></button></form>
@@ -189,7 +218,7 @@ export function renderApp(): string {
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <div id="live" class="visually-hidden" aria-live="polite"></div>
-    <noscript><p class="noscript">这幅画需要 JavaScript。<span lang="en">The shared scroll needs JavaScript. The <a href="/dreams/">archive</a> works without it.</span></p></noscript>
+    <noscript><p class="noscript">这幅画需要 JavaScript。<span lang="en">The shared picture needs JavaScript. The <a href="/dreams/">archive</a> works without it.</span></p></noscript>
     <script type="module" src="/static/app.js"></script>
   </body>
 </html>
@@ -234,11 +263,13 @@ interface ArchivedObject {
   contributor: number;
 }
 
-function sceneSvg(objects: ArchivedObject[], prefix: string, label: string): string {
-  return `<svg class="scene" viewBox="0 0 ${SCENE.width} ${SCENE.height}" role="img" aria-label="${escapeHtml(label)}">
-    <defs>${sceneDefs(prefix)}</defs>
-    ${paperMarkup(prefix)}
-    <g class="scene-art">${sceneMarkup(objects, prefix)}</g>
+// Each archive draws at the size its round was painted at: 2400×900 for the
+// dreams saved before the resize, 1800×1000 after.
+function sceneSvg(objects: ArchivedObject[], prefix: string, label: string, scene: Scene): string {
+  return `<svg class="scene" viewBox="0 0 ${scene.width} ${scene.height}" style="aspect-ratio: ${scene.width} / ${scene.height}" role="img" aria-label="${escapeHtml(label)}">
+    <defs>${sceneDefs(prefix)}<clipPath id="${prefix}-clip"><rect width="${scene.width}" height="${scene.height}"/></clipPath></defs>
+    <g clip-path="url(#${prefix}-clip)">${paperMarkup(prefix, scene)}
+    <g class="scene-art">${sceneMarkup(objects, prefix)}</g></g>
   </svg>`;
 }
 
@@ -246,8 +277,10 @@ function markChips(objects: ArchivedObject[]): string {
   const marks = [...new Set(objects.map((o) => o.contributor))].sort((a, b) => a - b);
   return marks
     .map((m) => {
-      const mark = MARKS[m % MARKS.length];
-      return `<span class="mark" style="--mark:${mark.colour}">${mark.glyph}</span>`;
+      const mark = markFor(m);
+      return m === AGENT_MARK
+        ? `<span class="mark agent" style="--mark:${mark.colour}" title="AI 画伴 companion">${mark.glyph}<span class="visually-hidden"> (AI)</span></span>`
+        : `<span class="mark" style="--mark:${mark.colour}">${mark.glyph}</span>`;
     })
     .join("");
 }
@@ -262,7 +295,7 @@ export function renderArchiveList(data: { rows: ArchiveRow[]; more: boolean }, p
       const prompt = PROMPTS[row.prompt_index];
       return `<li class="dream-card">
         <a href="/dreams/${row.round_id}/">
-          ${sceneSvg(scene, `a${row.round_id}`, `${prompt.zh} ${prompt.en}`)}
+          ${sceneSvg(scene, `a${row.round_id}`, `${prompt.zh} ${prompt.en}`, sceneOf(row))}
           <span class="dream-title">${escapeHtml(prompt.zh)}</span>
           <span class="dream-en" lang="en">${escapeHtml(prompt.en)}</span>
         </a>
@@ -283,27 +316,51 @@ export function renderArchiveList(data: { rows: ArchiveRow[]; more: boolean }, p
   );
 }
 
-export function renderArchive(row: ArchiveRow): string {
-  const scene = JSON.parse(row.scene) as ArchivedObject[];
+const timeFmt = (ms: number): string =>
+  new Date(ms).toLocaleTimeString("zh-CN", { timeZone: "Australia/Sydney", hour: "2-digit", minute: "2-digit" });
+
+/** A round's conversation beside its saved picture; text only, escaped. */
+function chatTranscript(roundId: number, chat: { messages: ChatMessage[]; more: boolean }): string {
+  if (chat.messages.length === 0) return "";
+  const items = chat.messages
+    .map((m) => {
+      const mark = m.mark === null ? { glyph: "客", colour: "#7d7f76" } : markFor(m.mark);
+      return `<li><span class="mark" style="--mark:${mark.colour}">${mark.glyph}</span> <time datetime="${new Date(m.at).toISOString()}">${timeFmt(m.at)}</time> <span class="text">${escapeHtml(m.body)}</span>${m.objectMotif ? ` <span class="about">(${escapeHtml(m.objectMotif)})</span>` : ""}</li>`;
+    })
+    .join("");
+  return `<section class="dream-chat" aria-labelledby="dream-chat-title">
+      <h2 id="dream-chat-title">这场梦里的话 <span lang="en">What was said during this dream</span></h2>
+      <ol class="transcript">${items}</ol>
+      ${chat.more ? `<p class="quiet">只显示前 ${chat.messages.length} 条。<span lang="en">Showing the first ${chat.messages.length}; the export has them all.</span></p>` : ""}
+      <p class="quiet">导出 <span lang="en">Export</span>: <a href="/api/chat/export?format=md&amp;round=${roundId}" download>Markdown</a> · <a href="/api/chat/export?format=txt&amp;round=${roundId}" download>Text</a> · <a href="/api/chat/export?format=json&amp;round=${roundId}" download>JSON</a></p>
+    </section>`;
+}
+
+export function renderArchive(row: ArchiveRow, chat: { messages: ChatMessage[]; more: boolean } = { messages: [], more: false }): string {
+  const objects = JSON.parse(row.scene) as ArchivedObject[];
   const keyframes = JSON.parse(row.keyframes) as ArchivedObject[][];
   const prompt = PROMPTS[row.prompt_index];
+  const scene = sceneOf(row);
+  // a long 2400-wide handscroll can be read at full size, sideways
+  const long = scene.width / scene.height > 2;
   // `<` escaped so the JSON can't close the script element early.
   const data = JSON.stringify({ keyframes }).replace(/</g, "\\u003c");
   return renderPage(
     `${prompt.zh} · 梦痕`,
     `<p class="crumb"><a href="/dreams/">← 梦痕 <span lang="en">All dream traces</span></a></p>
       <h1>${escapeHtml(prompt.zh)} <span class="en" lang="en">${escapeHtml(prompt.en)}</span></h1>
-      <p class="dream-meta">第 ${row.round_id} 梦 <span lang="en">Dream ${row.round_id}</span> · ${dateFmt(row.created_at)} · <span class="marks-inline"><span class="visually-hidden">合作者 Dreamers: </span>${markChips(scene)}</span> ${scene.length} 件 <span lang="en">objects</span></p>
-      <div class="archive-view fit" id="archive-view">
-        <div id="archive-scene">${sceneSvg(scene, "d", `${prompt.zh} ${prompt.en}`)}</div>
+      <p class="dream-meta">第 ${row.round_id} 梦 <span lang="en">Dream ${row.round_id}</span> · ${dateFmt(row.created_at)} · <span class="marks-inline"><span class="visually-hidden">合作者 Dreamers: </span>${markChips(objects)}</span> ${objects.length} 件 <span lang="en">objects</span></p>
+      <div class="archive-view fit${long ? " long" : ""}" id="archive-view">
+        <div id="archive-scene">${sceneSvg(objects, "d", `${prompt.zh} ${prompt.en}`, scene)}</div>
       </div>
       <div class="replay" role="group" aria-label="回放 Replay">
-        <button type="button" id="fit-toggle" aria-pressed="true">全卷 <span lang="en">Fit scroll</span></button>
+        ${long ? `<button type="button" id="fit-toggle" aria-pressed="true">全卷 <span lang="en">Fit scroll</span></button>` : ""}
         <button type="button" id="kf-prev">← 前 <span lang="en">Earlier</span></button>
         <span id="kf-label" role="status">定格 <span lang="en">Final</span> ${keyframes.length}/${keyframes.length}</span>
         <button type="button" id="kf-next">后 → <span lang="en">Later</span></button>
       </div>
       <p class="quiet">按步回看这幅画是怎样一点点长成的。<span lang="en">Step through how the picture grew.</span></p>
+      ${chatTranscript(row.round_id, chat)}
       <script type="application/json" id="keyframes">${data}</script>`,
     `<script type="module" src="/static/archive.js"></script>`,
   );

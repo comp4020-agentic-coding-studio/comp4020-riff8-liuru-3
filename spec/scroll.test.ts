@@ -162,14 +162,14 @@ describe("one long round", () => {
 
   it("returns an unplaced bubble to its place and custodian when the lease runs out", async () => {
     const pb = await mine(b);
-    const placed = await b.post("place", { motif: pb.palette[1], x: 2000, y: 400 });
+    const placed = await b.post("place", { motif: pb.palette[1], x: 1700, y: 400 });
     let o = (await b.state()).objects.find((x: any) => x.id === placed.body.objectId);
     const off = await b.post("offer", { objectId: o.id, version: o.version });
     expect((await c.post("claim", { offerId: off.body.offerId })).status).toBe(200);
     await sleep(1900);
     expect((await c.post("receive", { offerId: off.body.offerId, x: 100, y: 100 })).status).toBe(409);
     o = (await b.state()).objects.find((x: any) => x.id === placed.body.objectId);
-    expect(o).toMatchObject({ x: 2000, y: 400, custodian: (await b.state()).me, status: "placed" });
+    expect(o).toMatchObject({ x: 1700, y: 400, custodian: (await b.state()).me, status: "placed" });
   });
 
   it("completes an invitation through the inviter's consent", async () => {
@@ -207,7 +207,7 @@ describe("one long round", () => {
     // every viewer computes the same pairs
     expect((await b.state()).relations).toEqual(s.relations);
     const o = s.objects.find((x: any) => x.id === sub);
-    await a.post("update", { objectId: sub, version: o.version, x: 2300, y: 100, scale: 1, rotation: 0, flip: false, ink: 0.9, depth: 1 });
+    await a.post("update", { objectId: sub, version: o.version, x: 1750, y: 990, scale: 1, rotation: 0, flip: false, ink: 0.9, depth: 1 });
     s = await a.state();
     expect(s.relations.some((r: any) => r.a === sub)).toBe(false);
   });
@@ -215,11 +215,11 @@ describe("one long round", () => {
   it("turns an object into a reflection only near water, and back when the water leaves", async () => {
     const pa = await mine(a);
     const solid = pa.palette.find((m: string) => !["water", "moon", "sun", "cloud", "mist", "rain"].includes(m))!;
-    const far = (await a.post("place", { motif: solid, x: 2200, y: 150 })).body.objectId;
+    const far = (await a.post("place", { motif: solid, x: 1750, y: 150 })).body.objectId;
     let o = (await a.state()).objects.find((x: any) => x.id === far);
     expect((await a.post("reflect", { objectId: far, version: o.version, on: true })).status).toBe(409);
-    const water = (await a.post("place", { motif: "water", x: 1900, y: 820 })).body.objectId;
-    const near = (await a.post("place", { motif: solid, x: 1900, y: 700, scale: 0.6 })).body.objectId;
+    const water = (await a.post("place", { motif: "water", x: 1650, y: 950 })).body.objectId;
+    const near = (await a.post("place", { motif: solid, x: 1650, y: 840, scale: 0.6 })).body.objectId;
     o = (await a.state()).objects.find((x: any) => x.id === near);
     expect((await a.post("reflect", { objectId: near, version: o.version, on: true })).status).toBe(200);
     expect((await a.state()).objects.find((x: any) => x.id === near).reflectOn).toBe(water);
@@ -227,7 +227,7 @@ describe("one long round", () => {
     await a.post("withdraw", { objectId: water, version: w.version });
     o = (await a.state()).objects.find((x: any) => x.id === near);
     expect(o.reflectOn).toBeNull();
-    expect([o.x, o.y]).toEqual([1900, 700]);
+    expect([o.x, o.y]).toEqual([1650, 840]);
   });
 
   it("recovers the canonical scene after a disconnect", async () => {

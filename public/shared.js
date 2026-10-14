@@ -4,7 +4,10 @@
 // drift, reflection eligibility). Plain JS so the browser can load it without
 // a build step.
 
-export const SCENE = { width: 2400, height: 900 };
+// New rounds are painted at SCENE; every round stores its own size, so the
+// dreams saved before the resize (all LEGACY_SCENE) still render as saved.
+export const SCENE = { width: 1800, height: 1000 };
+export const LEGACY_SCENE = { width: 2400, height: 900 };
 
 export const LIMITS = {
   sceneObjects: 48,
@@ -104,6 +107,16 @@ export const MARKS = [
   { glyph: "风", colour: "#4d5f6e" },
   { glyph: "灯", colour: "#8a5a30" },
 ];
+
+// The AI companion's mark: its own glyph (机, "machine") and a cool grey with
+// a dashed ring wherever it's drawn, never one of the twelve people's marks.
+export const AGENT_MARK = 99;
+export const AGENT = { glyph: "机", colour: "#6d7680", agent: true, zh: "画伴 · AI", en: "AI companion" };
+
+/** A stored mark index (live or archived) as its glyph and colour. */
+export function markFor(i) {
+  return i === AGENT_MARK ? AGENT : MARKS[i % MARKS.length];
+}
 
 /** The object's box in scene units, ignoring rotation (modest, ±20°). */
 export function box(o) {
@@ -231,7 +244,7 @@ export function bubbleDrift(offer, t) {
 }
 
 /** Clamp and validate a client-supplied transform. Returns undefined if invalid. */
-export function cleanTransform(t, motifId) {
+export function cleanTransform(t, motifId, scene = SCENE) {
   if (typeof motifId !== "string" || !Object.hasOwn(MOTIF_BY_ID, motifId)) return undefined;
   if (typeof t !== "object" || t === null) return undefined;
   const num = (v) => typeof v === "number" && Number.isFinite(v);
@@ -242,7 +255,7 @@ export function cleanTransform(t, motifId) {
   const depth = t.depth ?? 1;
   const flip = t.flip ?? false;
   if (![x, y, scale, rotation, ink, depth].every(num) || typeof flip !== "boolean") return undefined;
-  if (x < 0 || x > SCENE.width || y < 0 || y > SCENE.height) return undefined;
+  if (x < 0 || x > scene.width || y < 0 || y > scene.height) return undefined;
   if (scale < LIMITS.scale[0] || scale > LIMITS.scale[1]) return undefined;
   if (rotation < LIMITS.rotation[0] || rotation > LIMITS.rotation[1]) return undefined;
   if (ink < LIMITS.ink[0] || ink > LIMITS.ink[1]) return undefined;
@@ -341,11 +354,18 @@ export function sceneDefs(prefix = "s") {
   </linearGradient>`;
 }
 
-export function paperMarkup(prefix = "s") {
-  return `<rect class="paper" width="${SCENE.width}" height="${SCENE.height}" fill="#F3EBDD"/>
-  <rect width="${SCENE.width}" height="${SCENE.height}" filter="url(#${prefix}-grain)"/>
-  <image class="scaffold" href="${ASSET_BASE}scaffold-ridge.svg" x="0" y="250" width="2400" height="360" opacity="0.55"/>
-  <image class="scaffold" href="${ASSET_BASE}scaffold-water.svg" x="0" y="600" width="2400" height="200" opacity="0.7"/>`;
+/**
+ * The paper and its faint scaffolding at a given scene size. At the legacy
+ * 2400×900 this is exactly what the old scroll drew; other sizes centre the
+ * same 2400-wide scaffold, which the frame around the scene crops.
+ */
+export function paperMarkup(prefix = "s", scene = SCENE) {
+  const { width: w, height: h } = scene;
+  const x = (w - 2400) / 2;
+  return `<rect class="paper" width="${w}" height="${h}" fill="#F3EBDD"/>
+  <rect width="${w}" height="${h}" filter="url(#${prefix}-grain)"/>
+  <image class="scaffold" href="${ASSET_BASE}scaffold-ridge.svg" x="${x}" y="${250 + (h - 900) * 0.5}" width="2400" height="360" opacity="0.55"/>
+  <image class="scaffold" href="${ASSET_BASE}scaffold-water.svg" x="${x}" y="${600 + (h - 900) * 0.8}" width="2400" height="200" opacity="0.7"/>`;
 }
 
 /**

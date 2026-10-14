@@ -151,6 +151,45 @@ db.exec(`
     created_at INTEGER NOT NULL
   );
 
+  -- The room's conversation. It spans rounds, so each message records the
+  -- round (and phase) it was sent in; round_id is NULL before the first dream.
+  CREATE TABLE IF NOT EXISTS chat_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    participant_id INTEGER NOT NULL REFERENCES participants(id),
+    round_id INTEGER REFERENCES rounds(id),
+    phase TEXT NOT NULL,
+    mark INTEGER,
+    body TEXT NOT NULL,
+    object_id INTEGER,
+    object_motif TEXT,
+    created_at INTEGER NOT NULL
+  );
+
+  -- The AI companion's visits: at most one present per round.
+  CREATE TABLE IF NOT EXISTS companions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    round_id INTEGER NOT NULL REFERENCES rounds(id),
+    participant_id INTEGER NOT NULL REFERENCES participants(id),
+    invited_by INTEGER NOT NULL REFERENCES participants(id),
+    status TEXT NOT NULL DEFAULT 'present',
+    ended_by INTEGER REFERENCES participants(id),
+    created_at INTEGER NOT NULL,
+    ended_at INTEGER
+  );
+
   CREATE INDEX IF NOT EXISTS objects_round ON objects(round_id, status);
   CREATE INDEX IF NOT EXISTS events_round ON events(round_id, id);
+  CREATE INDEX IF NOT EXISTS chat_round ON chat_messages(round_id, id);
+  CREATE UNIQUE INDEX IF NOT EXISTS one_companion ON companions(round_id) WHERE status = 'present';
 `);
+
+// Columns added after rows already existed. Old rounds keep NULL scene sizes,
+// which means the 2400×900 scroll they were painted on; old participants are
+// people (agent = 0).
+function addColumn(table: string, column: string, decl: string): void {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!cols.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${decl}`);
+}
+addColumn("rounds", "scene_w", "INTEGER");
+addColumn("rounds", "scene_h", "INTEGER");
+addColumn("participants", "agent", "INTEGER NOT NULL DEFAULT 0");

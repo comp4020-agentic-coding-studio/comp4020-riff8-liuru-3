@@ -117,7 +117,9 @@ body.page:has(.archive-view) .prose { max-width: 90rem; }
 }
 
 .dream-card a { display: grid; gap: 0.2rem; color: var(--ink); text-decoration: none; }
-.dream-card .scene { width: 100%; height: auto; border: 1px solid #d8ccb6; }
+/* every card the same frame, whatever size its dream was painted at; the
+   picture sits centred on the paper (the SVG's default "meet") */
+.dream-card .scene { width: 100%; height: auto; aspect-ratio: 9 / 5 !important; border: 1px solid #d8ccb6; background: #efe5d3; }
 .dream-title { font-family: var(--serif); font-size: 1.1rem; }
 .dream-en, .dream-meta { color: var(--ink-mid); font-size: 0.9rem; }
 
@@ -134,9 +136,18 @@ body.page:has(.archive-view) .prose { max-width: 90rem; }
   margin-right: 0.15rem;
 }
 
-.archive-view { overflow-x: auto; border: 1px solid #d8ccb6; }
-.archive-view .scene { display: block; height: min(70vh, 640px); width: auto; aspect-ratio: 8 / 3; }
-.archive-view.fit .scene { width: 100%; height: auto; }
+.archive-view { overflow-x: auto; border: 1px solid #d8ccb6; background: #efe5d3; }
+.archive-view .scene { display: block; margin: 0 auto; width: min(100%, calc(75vh * 1.8)); height: auto; }
+/* the long 2400×900 scrolls saved before the resize can be read at full height */
+.archive-view.long .scene { width: auto; height: min(70vh, 640px); margin: 0; }
+.archive-view.long.fit .scene { width: 100%; height: auto; }
+.mark.agent { box-shadow: 0 0 0 1.5px #fbf6ec, 0 0 0 3px var(--mark); background: repeating-linear-gradient(135deg, var(--mark) 0 3px, #808a94 3px 5px); }
+.dream-chat { margin-top: 2rem; max-width: 46rem; }
+.dream-chat h2 { font-family: var(--serif); font-weight: normal; font-size: 1.15rem; }
+.transcript { list-style: none; padding: 0; display: grid; gap: 0.4rem; }
+.transcript li { display: flex; gap: 0.4rem; align-items: baseline; overflow-wrap: anywhere; }
+.transcript li > * { min-width: 0; }
+.transcript time, .transcript .about { color: var(--ink-mid); font-size: 0.85rem; flex: none; }
 .replay { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.8rem; }
 .pager { display: flex; gap: 1.5rem; margin-top: 1.5rem; }
 .pager a { display: inline-flex; align-items: center; min-height: 44px; }

@@ -30,6 +30,7 @@ it("ships every motif, the scaffolding and the client modules", async () => {
     "/static/app.js",
     "/static/shared.js",
     "/static/archive.js",
+    "/static/motion.js",
     "/static/app.css",
     "/static/site.css",
   ];

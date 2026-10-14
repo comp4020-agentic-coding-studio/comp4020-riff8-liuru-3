@@ -3,7 +3,10 @@ import { readFileSync, statSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { extname, join, normalize } from "node:path";
 import { marked } from "marked";
+import * as chat from "./chat.ts";
+import { companionPulse, companionStats, initCompanion } from "./companion.ts";
 import * as game from "./game.ts";
+import { attachPresence } from "./presence.ts";
 import { renderArchive, renderArchiveList, renderApp, renderCredits, renderHow, renderPage } from "./templates.ts";
 
 const PORT = Number(process.env.PORT ?? 8080);
@@ -17,7 +20,12 @@ function parseCookies(header: string | undefined): Record<string, string> {
   for (const part of header.split(";")) {
     const eq = part.indexOf("=");
     if (eq === -1) continue;
-    out[part.slice(0, eq).trim()] = decodeURIComponent(part.slice(eq + 1).trim());
+    // a malformed % escape must not take the whole server down
+    try {
+      out[part.slice(0, eq).trim()] = decodeURIComponent(part.slice(eq + 1).trim());
+    } catch {
+      // ignore that cookie
+    }
   }
   return out;
 }
@@ -64,6 +72,7 @@ function send(res: ServerResponse, event: string, data: unknown, id?: number): v
 
 game.onEvents((events) => {
   for (const c of clients) for (const e of events) send(c.res, "change", e, e.id);
+  if (events.some((e) => e.type === "companion" || e.type === "round-started")) companionPulse();
 });
 
 let lastPresence = "";
@@ -73,12 +82,6 @@ function broadcastPresence(): void {
   if (key === lastPresence) return;
   lastPresence = key;
   for (const c of clients) send(c.res, "presence", { online: pids });
-}
-
-// Ephemeral previews (someone dragging, or composing a proposal) go to the
-// other viewers without touching the database or the event cursor.
-function broadcastPreview(from: string, data: unknown): void {
-  for (const c of clients) if (c.pid !== from) send(c.res, "preview", data);
 }
 
 // ---------------------------------------------------------------- limits
@@ -127,6 +130,9 @@ const actions: Record<string, Handler> = {
   "/api/receive": game.placeClaimed,
   "/api/release": game.releaseOffer,
   "/api/dew": game.dew,
+  "/api/companion/invite": game.inviteCompanion,
+  "/api/companion/dismiss": game.dismissCompanion,
+  "/api/chat": chat.say,
 };
 
 const TYPES: Record<string, string> = {
@@ -200,6 +206,50 @@ const server = createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === "GET" && url.pathname === "/api/chat") {
+      json(res, 200, chat.history(url.searchParams.get("before") ?? undefined, url.searchParams.get("limit") ?? undefined), cookieHeader);
+      return;
+    }
+
+    if (req.method === "GET" && url.pathname === "/api/chat/export") {
+      const format = url.searchParams.get("format") ?? "md";
+      if (format !== "md" && format !== "txt" && format !== "json") {
+        json(res, 400, { ok: false, code: "format", message: "md, txt or json" });
+        return;
+      }
+      const roundParam = url.searchParams.get("round");
+      const roundId = roundParam === null ? undefined : Number(roundParam);
+      if (roundId !== undefined && !(Number.isInteger(roundId) && roundId > 0 && chat.exists(roundId))) {
+        json(res, 404, { ok: false, code: "round", message: "no such dream" });
+        return;
+      }
+      const name = `liuru-chat${roundId === undefined ? "" : `-dream-${roundId}`}.${format}`;
+      res.writeHead(200, {
+        "content-type": { md: "text/markdown", txt: "text/plain", json: "application/json" }[format] + "; charset=utf-8",
+        "content-disposition": `attachment; filename="${name}"`,
+        "cache-control": "no-store",
+        "x-content-type-options": "nosniff",
+      });
+      // Streamed a page at a time, with backpressure, so a long history
+      // never has to fit in memory.
+      const chunks = chat.exportChunks(format, roundId);
+      const pump = () => {
+        for (;;) {
+          const next = chunks.next();
+          if (next.done) return res.end();
+          if (!res.write(next.value)) return res.once("drain", pump);
+        }
+      };
+      pump();
+      return;
+    }
+
+    // Test and measurement only: off unless the server was started with it.
+    if (req.method === "GET" && url.pathname === "/api/companion/stats" && process.env.EXPOSE_STATS === "1") {
+      json(res, 200, { ...companionStats(), rss: process.memoryUsage().rss, ws: presence.count(), sse: clients.size });
+      return;
+    }
+
     if (req.method === "GET" && url.pathname === "/api/state") {
       const p = game.participantFor(token);
       json(res, 200, game.join(p, online()), cookieHeader);
@@ -223,11 +273,13 @@ const server = createServer(async (req, res) => {
       clients.add(client);
       send(res, "snapshot", snap);
       broadcastPresence();
+      companionPulse();
       const beat = setInterval(() => res.write(": beat\n\n"), 20_000);
       req.on("close", () => {
         clearInterval(beat);
         clients.delete(client);
         broadcastPresence();
+        companionPulse();
       });
       return;
     }
@@ -248,12 +300,6 @@ const server = createServer(async (req, res) => {
         json(res, 400, { ok: false, code: "json", message: "请求格式不对 / Malformed request." });
         return;
       }
-      if (url.pathname === "/api/preview") {
-        if (allow(`preview:${p.pid}`, 12, 12)) broadcastPreview(p.pid, { ...sanitisePreview(body), by: p.pid });
-        res.writeHead(204, cookieHeader);
-        res.end();
-        return;
-      }
       const handler = actions[url.pathname];
       if (!handler) {
         json(res, 404, { ok: false, code: "route", message: "not found" });
@@ -265,8 +311,12 @@ const server = createServer(async (req, res) => {
       }
       // Action ids are scoped to their route, so a reused id on a different
       // action can't replay the wrong stored response.
-      const scoped = typeof body.actionId === "string" ? `${url.pathname.slice(5)}:${body.actionId}` : body.actionId;
+      const scoped = typeof body.actionId === "string" ? `${url.pathname.slice(5).replace(/[^a-z]/g, "")}:${body.actionId}` : body.actionId;
       const result = handler(p, { ...body, actionId: scoped }) as Record<string, unknown>;
+      // Who did what, for reading the deployed app from its logs. The pid is
+      // the public participant id; the cookie itself is never logged.
+      console.log(`action pid=${p.pid} ${url.pathname.slice(5)} ${result?.ok === false ? `refused:${result.code}` : "ok"}`);
+      if (url.pathname.startsWith("/api/companion/")) companionPulse();
       json(res, result?.ok === false ? 409 : 200, { ok: true, ...result }, cookieHeader);
       return;
     }
@@ -299,7 +349,7 @@ const server = createServer(async (req, res) => {
     if (req.method === "GET" && dream) {
       const row = game.archive(Number(dream[1]));
       if (row) {
-        html(res, 200, renderArchive(row));
+        html(res, 200, renderArchive(row, chat.roundMessages(row.round_id)));
         return;
       }
     }
@@ -307,6 +357,7 @@ const server = createServer(async (req, res) => {
     html(res, 404, renderPage("Not found · 六如", "<h1>找不到 / Not found</h1><p><a href=\"/\">回到画卷 / Back to the scroll</a></p>"));
   } catch (err) {
     if (err instanceof game.GameError) {
+      if (req.method === "POST") console.log(`action ${url.pathname.slice(5)} refused:${err.code}`);
       json(res, err.status, { ok: false, code: err.code, message: err.message }, cookieHeader);
       return;
     }
@@ -315,26 +366,35 @@ const server = createServer(async (req, res) => {
   }
 });
 
-function sanitisePreview(body: Record<string, unknown>) {
-  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.round(v * 10) / 10 : undefined);
-  const motif = typeof body.motif === "string" && /^[a-z]{2,12}$/.test(body.motif) ? body.motif : undefined;
-  return {
-    kind: body.kind === "move" || body.kind === "borrow" || body.kind === "place" || body.kind === "end" ? body.kind : "end",
-    objectId: num(body.objectId),
-    motif,
-    x: num(body.x),
-    y: num(body.y),
-    scale: num(body.scale),
-    rotation: num(body.rotation),
-    flip: body.flip === true,
-  };
-}
-
 // Deadlines pass whether or not anyone is asking: a short tick expires
 // proposals and moves the round on. On boot, the first tick reconciles
 // anything that elapsed while the server was down, exactly once.
 game.reconcile();
 setInterval(() => game.reconcile(), 250).unref();
+
+const presence = attachPresence(server, {
+  // The socket belongs to an existing visitor: the page load that opened it
+  // already issued the cookie, so a bare upgrade with none is refused.
+  identify: (req) => {
+    const token = parseCookies(req.headers.cookie)[VISITOR_COOKIE];
+    return token && /^[0-9a-f-]{36}$/.test(token) ? game.existingParticipant(token) : undefined;
+  },
+  sameOrigin,
+});
+
+// The companion acts only while at least one person has the room open.
+initCompanion(() => clients.size);
+
+// Read-only numbers for the memory measurement in README.
+if (process.env.EXPOSE_STATS === "1") {
+  setInterval(() => {
+    const m = process.memoryUsage();
+    const s = companionStats();
+    console.log(
+      `stats rss=${Math.round(m.rss / 1048576)}MB heap=${Math.round(m.heapUsed / 1048576)}MB sse=${clients.size} ws=${presence.count()} companion=${s.accepted}/${s.tried} rejected=${s.rejected}`,
+    );
+  }, 5000).unref();
+}
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`listening on ${PORT}`);
@@ -342,6 +402,7 @@ server.listen(PORT, "0.0.0.0", () => {
 
 for (const sig of ["SIGTERM", "SIGINT"] as const) {
   process.on(sig, () => {
+    presence.close();
     for (const c of clients) c.res.end();
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(0), 1000).unref();

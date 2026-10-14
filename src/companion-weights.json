@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "learned": {
+    "rel": 1.069,
+    "relOther": -0.148,
+    "band": 1.959,
+    "overlap": -0.127,
+    "gap": -1.103,
+    "crowd": 0.543,
+    "edge": -0.346,
+    "balance": 0.385,
+    "prompt": 0,
+    "fill": 0
+  },
+  "hand": {
+    "prompt": 0.8,
+    "fill": 1.2,
+    "overlap": -1.5
+  },
+  "features": {
+    "rel": 1.069,
+    "relOther": -0.148,
+    "band": 1.959,
+    "overlap": -1.627,
+    "gap": -1.103,
+    "crowd": 0.543,
+    "edge": -0.346,
+    "balance": 0.385,
+    "prompt": 0.8,
+    "fill": 1.2
+  },
+  "priors": {
+    "nothing": 1.6,
+    "place": -0.2,
+    "respond": 1.2,
+    "acknowledge": 1.5,
+    "invite": -2.6,
+    "adjust": -1.4,
+    "reflect": -1.8,
+    "offer": -3.2,
+    "withdraw": -3.5,
+    "reroll": -2.4,
+    "borrow": -0.8,
+    "claim": 1.4,
+    "dew": -2.2
+  },
+  "temperature": 0.6,
+  "source": "conditional logit over 95 placed motifs from 16 public dream traces, 24 random alternatives each; mean log-likelihood -2.651 (chance -3.219); real spot ranked first 21/95"
+}
