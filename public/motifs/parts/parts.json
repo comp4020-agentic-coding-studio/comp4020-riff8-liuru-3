@@ -1,0 +1,176 @@
+{
+  "fish": {
+    "parts": [
+      {
+        "id": "fish-tail",
+        "pivot": [
+          54.5,
+          17.5
+        ]
+      },
+      {
+        "id": "fish-body"
+      }
+    ],
+    "notes": "Tail drawn under the body so the fin root stays tucked when it swings; rotate fish-tail about its pivot (about +/-12deg) or skewY."
+  },
+  "crane": {
+    "parts": [
+      {
+        "id": "crane-body"
+      },
+      {
+        "id": "crane-neck",
+        "pivot": [
+          37,
+          58
+        ]
+      },
+      {
+        "id": "crane-leg-near",
+        "pivot": [
+          62,
+          76
+        ]
+      },
+      {
+        "id": "crane-leg-far",
+        "pivot": [
+          66.5,
+          76
+        ]
+      }
+    ],
+    "head": [
+      32,
+      15
+    ],
+    "foot": [
+      61,
+      130
+    ],
+    "notes": "The crane stands on one leg with the other folded up under the body (crane-leg-far is the raised leg, ending at the knee/foot near y=100), so it is not drawn mid-stride: animate a 'walk' as the standing leg rocking a few degrees and the folded leg lifting/swinging about its hip, with the neck bobbing (rotate about pivot, about +/-6deg). Legs sit above the body, as in the original."
+  },
+  "deer": {
+    "parts": [
+      {
+        "id": "deer-body"
+      },
+      {
+        "id": "deer-leg-front-near",
+        "pivot": [
+          51.5,
+          73
+        ]
+      },
+      {
+        "id": "deer-leg-front-far",
+        "pivot": [
+          60,
+          75
+        ]
+      },
+      {
+        "id": "deer-leg-hind-far",
+        "pivot": [
+          94,
+          75
+        ]
+      },
+      {
+        "id": "deer-leg-hind-near",
+        "pivot": [
+          101,
+          73
+        ]
+      },
+      {
+        "id": "deer-head",
+        "pivot": [
+          37,
+          33
+        ]
+      }
+    ],
+    "notes": "The neck is not separable: its outlines are continuous strokes with the back and chest, so deer-head is head + ear + antlers only and nods about the nape (keep rotation within about +/-6deg or the jaw parts from the throat stroke; negative = lower, positive = raise). Legs are split one per part (pivot at each hip) rather than one deer-legs part, so they can swing in diagonal pairs."
+  },
+  "birds": {
+    "parts": [
+      {
+        "id": "birds-a",
+        "pivot": [
+          22,
+          18.8
+        ]
+      },
+      {
+        "id": "birds-b",
+        "pivot": [
+          54.3,
+          32.2
+        ]
+      },
+      {
+        "id": "birds-c",
+        "pivot": [
+          80.3,
+          13.3
+        ]
+      }
+    ],
+    "notes": "Pivot is each bird's body dot (where the wings meet); scaleY about it flaps, translate drifts. The birds do not overlap."
+  },
+  "lantern": {
+    "parts": [
+      {
+        "id": "lantern-light",
+        "pivot": [
+          22,
+          40
+        ]
+      },
+      {
+        "id": "lantern-frame",
+        "pivot": [
+          22,
+          1
+        ]
+      }
+    ],
+    "hang": [
+      22,
+      1
+    ],
+    "notes": "Swing both parts together about hang; flicker lantern-light alone (opacity, or scale about its pivot, the paper's centre)."
+  },
+  "willow": {
+    "parts": [
+      {
+        "id": "willow-trunk-wash"
+      },
+      {
+        "id": "willow-fronds",
+        "pivot": [
+          122,
+          60
+        ]
+      },
+      {
+        "id": "willow-trunk"
+      }
+    ],
+    "crown": [
+      122,
+      60
+    ],
+    "notes": "Three parts so the stack keeps the original paint order: the trunk's soft wash under the fronds, the trunk and branch ink over them. Keep willow-trunk-wash and willow-trunk still. Sway with skewX about the pivot (a few degrees) so tips move most and the strands stay on their branches; the trunk stays still."
+  },
+  "water": {
+    "parts": [
+      {
+        "id": "water-glint"
+      }
+    ],
+    "notes": "water-glint is new art (hand-written, not split): an overlay for water.svg with the same viewBox; translate it slowly along x (a few units) and/or fade it."
+  }
+}
