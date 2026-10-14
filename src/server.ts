@@ -336,8 +336,11 @@ const server = createServer(async (req, res) => {
       return;
     }
     if (req.method === "GET" && url.pathname === "/decision/") {
-      const md = readFileSync("docs/decisions/0002-shared-dream-custody.md", "utf8");
-      html(res, 200, renderPage("Decision · 六如", await marked.parse(md)));
+      // the newest record first, then the custody decision it builds on
+      const md = ["0003-a-room-you-can-see-hear-and-paint-with.md", "0002-shared-dream-custody.md"]
+        .map((f) => readFileSync(`docs/decisions/${f}`, "utf8"))
+        .join("\n\n---\n\n");
+      html(res, 200, renderPage("Decisions · 六如", await marked.parse(md)));
       return;
     }
     if (req.method === "GET" && url.pathname === "/dreams/") {

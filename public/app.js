@@ -266,7 +266,7 @@ function applyPatch(type, p) {
       const had = S.offers.get(of.id);
       S.offers.set(of.id, of);
       if (!had && of.offerer !== S.me) {
-        toast(`${markHtml(of.offerer)} 放出一个泡：${motifName(S.objects.get(of.objectId)?.motif ?? "moon")} <span lang="en">offered something in a bubble. Catch it from the list or the scroll.</span>`);
+        toast(`${markHtml(of.offerer)} 放出一个泡：${motifName(S.objects.get(of.objectId)?.motif ?? "moon")} <span lang="en">offered something in a bubble. Catch it from the list or the picture.</span>`);
       }
       if (of.status === "claimed" && of.claimant !== S.me && UI.receiving !== of.id && had?.status === "floating" && UI.wantOffer === of.id) {
         toast("已被接住 <span lang=\"en\">Someone has already received it.</span>");
@@ -450,6 +450,9 @@ function toScene(ev) {
   return { x: p.x, y: p.y };
 }
 
+// Is the pointer over one of the floating panels rather than the picture?
+const overPanel = (ev) => !!document.elementFromPoint(ev.clientX, ev.clientY)?.closest(".float, .overlay > .card, .modebar");
+
 const onPaper = (p) => p.x >= 0 && p.y >= 0 && p.x <= S.scene.width && p.y <= S.scene.height;
 
 const clampScene = (p) => ({
@@ -537,9 +540,9 @@ function tickClock() {
 
 function announcePhase() {
   const msg = {
-    compose: "入梦了：选一件景物放上画卷 The dream has begun: place a motif.",
+    compose: "入梦了：选一件景物放上画面 The dream has begun: place a motif.",
     refine: "留一点空白：不再添新景，只调整、借景、传泡 Make room for the scene: no new placements now, only refine, borrow and pass.",
-    reveal: "画卷定格，已存为梦痕 The scroll is frozen and saved as a dream trace.",
+    reveal: "画面定格，已存为梦痕 The picture is frozen and saved as a dream trace.",
     dissolve: "梦散了，画面慢慢回到纸上 The dream dissolves back into paper.",
     finished: "梦醒 The dream has ended.",
   }[S.phase];
@@ -1033,7 +1036,7 @@ function chooseMotif(id) {
     UI.mode = "place";
     UI.motif = id;
     UI.selected = null;
-    say(`已选 ${MOTIF_BY_ID[id].zh} ${MOTIF_BY_ID[id].en}: tap the scroll to place it, or press Enter to place it in the centre.`);
+    say(`已选 ${MOTIF_BY_ID[id].zh} ${MOTIF_BY_ID[id].en}: tap the picture to place it, or press Enter to place it in the centre.`);
   }
   renderAll();
   renderModebar();
@@ -1052,9 +1055,11 @@ $("palette").addEventListener("pointermove", (ev) => {
   if (!d) return;
   if (!d.active && Math.hypot(ev.clientX - d.x0, ev.clientY - d.y0) > 10) d.active = true;
   if (!d.active) return;
-  const r = svg.getBoundingClientRect();
-  const over = ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom;
-  UI.ghost = over ? { motif: d.motif, ...toScene(ev), scale: 1, rotation: 0, flip: false } : null;
+  const at = toScene(ev);
+  const over = onPaper(at) && !overPanel(ev);
+  UI.ghost = over ? { motif: d.motif, ...at, scale: 1, rotation: 0, flip: false } : null;
+  UI.pointer = at;
+  sendCursor();
   renderGhosts();
 });
 $("palette").addEventListener("pointerup", async (ev) => {
@@ -1063,12 +1068,10 @@ $("palette").addEventListener("pointerup", async (ev) => {
   if (!d || !d.active) return;
   UI.trayDragged = true;
   setTimeout(() => (UI.trayDragged = false), 50);
-  const r = svg.getBoundingClientRect();
   UI.ghost = null;
   renderGhosts();
-  if (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom) {
-    await placeAt(d.motif, clampScene(toScene(ev)));
-  }
+  const at = toScene(ev);
+  if (onPaper(at) && !overPanel(ev)) await placeAt(d.motif, clampScene(at));
 });
 
 async function placeAt(motif, p) {
@@ -1307,7 +1310,7 @@ async function catchBubble(offerId) {
     const o = of && S.objects.get(of.objectId);
     if (o) UI.ghost = { motif: o.motif, x: of.origin.x, y: of.origin.y, scale: o.scale, rotation: o.rotation, flip: o.flip };
     for (const m of MODES) document.body.classList.toggle(`mode-${m}`, UI.mode === m);
-    say("接住了，八秒内点画面放下 Caught it: tap the scroll within eight seconds to set it down.");
+    say("接住了，八秒内点画面放下 Caught it: tap the picture within eight seconds to set it down.");
     renderModebar();
     renderAll();
   }
@@ -1643,7 +1646,7 @@ function renderInspector() {
   } else if (o.status === "offered") {
     controls = `<p class="reason">它正在泡里，等人接住。<span lang="en">It's floating in a bubble, waiting to be caught.</span></p>`;
   } else if (!editable()) {
-    controls = `<p class="reason">画卷已定，只能看。<span lang="en">The scroll is frozen: look only.</span></p>`;
+    controls = `<p class="reason">画面已定，只能看。<span lang="en">The picture is frozen: look only.</span></p>`;
   }
   sec.innerHTML = `
     <button type="button" class="close" data-act="deselect" aria-label="关闭 Close">×</button>
@@ -1805,7 +1808,7 @@ function renderObjectList() {
   const ul = $("object-list");
   if (ul.dataset.html !== html) {
     ul.dataset.html = html;
-    ul.innerHTML = html || `<li class="quiet">画上还是空的。<span lang="en">The scroll is still empty.</span></li>`;
+    ul.innerHTML = html || `<li class="quiet">画上还是空的。<span lang="en">The picture is still empty.</span></li>`;
   }
 }
 

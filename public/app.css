@@ -601,4 +601,10 @@ body.offline .rail, body.offline .tray { opacity: 0.5; pointer-events: none; }
   text-align: center;
 }
 
+/* fingers need bigger targets than a mouse does */
+@media (pointer: coarse) {
+  .about-link, .chat-older, .chat-export summary, .tray-head button, .reroll, .inspector .chat-about-btn { min-height: 44px; }
+  .chat-export summary { display: flex; align-items: center; }
+}
+
 .req .accept [lang="en"], .overlay .card .big [lang="en"] { color: #e6dccb; }

@@ -836,7 +836,7 @@ function requirePhase(r: RoundRow | undefined, now: number, allowed: string[]): 
       phase === "refine" && allowed.includes("compose") && !allowed.includes("refine")
         ? "现在只调整，不添新景 / Placement has closed: only refine what's there."
         : phase === "reveal" || phase === "dissolve"
-          ? "画卷已定 / The scroll is frozen."
+          ? "画面已定 / The picture is frozen."
           : "此刻不能这样做 / Not possible in this phase.";
     fail(409, "phase", why);
   }
@@ -870,7 +870,7 @@ function sceneCapacity(r: RoundRow): void {
       .get(r.id) as { n: number }
   ).n;
   if (scene >= LIMITS.sceneObjects) {
-    fail(409, "scene-full", "画卷已满，收回一件可腾出位置 / The scroll is full: withdrawing one frees a place.");
+    fail(409, "scene-full", "画面已满，收回一件可腾出位置 / The picture is full: withdrawing one frees a place.");
   }
 }
 
@@ -905,7 +905,7 @@ function inScene(r: RoundRow, x: unknown, y: unknown): { x: number; y: number } 
     x > scene.width ||
     y > scene.height
   ) {
-    fail(400, "position", "位置不在画卷上 / That position is off the scroll.");
+    fail(400, "position", "位置不在画上 / That position is off the picture.");
   }
   return { x: x as number, y: y as number };
 }

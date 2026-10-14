@@ -19,6 +19,13 @@ so the library was authored instead.
 - **Files:** `public/motifs/<id>.svg`, one per motif in `MOTIFS`
   (`public/shared.js`), plus `scaffold-ridge.svg`, `scaffold-water.svg` and
   `seal.svg`.
+- **Parts (crit 10):** `public/motifs/parts/` holds six motifs (fish, crane,
+  deer, small birds, lantern, willow) split into separately animated parts,
+  listed in `PARTS` (`public/motion.js`). They are not new drawings:
+  `scripts/split-motifs.py` partitions each original's own paths, so the
+  parts stack back into the original. `parts/water-glint.svg` is new, drawn
+  by liuru's crit agent in the same hand during the crit-10 riff run: eight
+  tapered light strokes for a water patch, same licence.
 - **Technique:** each file carries its own small SVG filters (fractal-noise
   displacement for rough brush edges, blur for washes). Backgrounds are
   transparent; there is no embedded text, script, raster image or external

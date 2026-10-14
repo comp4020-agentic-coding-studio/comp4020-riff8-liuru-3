@@ -19,9 +19,9 @@ const head = (title: string): string => `<meta charset="utf-8" />
     <link rel="stylesheet" href="/static/site.css" />`;
 
 const siteNav = `<header class="page-bar">
-      <a class="brand" href="/"><img src="/static/motifs/seal.svg" alt="" width="28" height="28" /><span>六如 · 共梦长卷</span></a>
+      <a class="brand" href="/"><img src="/static/motifs/seal.svg" alt="" width="28" height="28" /><span>六如 · 共梦图</span></a>
       <nav aria-label="站内 Site">
-        <a href="/">画卷 <span lang="en">Scroll</span></a>
+        <a href="/">画 <span lang="en">The picture</span></a>
         <a href="/how/">玩法 <span lang="en">How to play</span></a>
         <a href="/dreams/">梦痕 <span lang="en">Dream archive</span></a>
         <a href="/readme/">关于 <span lang="en">About</span></a>
@@ -230,11 +230,11 @@ export function renderHow(): string {
   return renderPage(
     "玩法 How to play · 六如",
     `<h1>玩法 <span lang="en">How to play</span></h1>
-      <p>一场梦约七分钟。所有人在同一幅长卷上，读同一句梦。<span lang="en">A dream lasts about seven minutes. Everyone shares one long scroll and one line of poetry.</span></p>
+      <p>一场梦约七分钟。所有人看着同一整幅画，读同一句梦。<span lang="en">A dream lasts about seven minutes. Everyone sees the same whole picture and reads one line of poetry.</span></p>
       <h2>三步 <span lang="en">Three steps</span></h2>
       <ol>
         <li><strong>读梦 <span lang="en">Read the dream.</span></strong> 顶部那句话就是题目，没有标准答案。<span lang="en">The line at the top is the theme. There's no correct answer.</span></li>
-        <li><strong>布景 <span lang="en">Arrange your motifs.</span></strong> 你有八种景物；选一件，点在画上，或直接拖上去。选中自己的景物可以调大小、角度、浓淡和远近。<span lang="en">You hold eight kinds of motif. Pick one and tap the scroll (or drag it on). Select your own object to change its size, angle, ink and depth.</span></li>
+        <li><strong>布景 <span lang="en">Arrange your motifs.</span></strong> 你有八种景物；选一件，点在画上，或直接拖上去。选中自己的景物可以调大小、角度、浓淡和远近。<span lang="en">You hold eight kinds of motif. Pick one and tap the picture (or drag it on). Select your own object to change its size, angle, ink and depth.</span></li>
         <li><strong>成全 <span lang="en">Complete another person's scene.</span></strong> 别人的船也许正缺一条河。<span lang="en">Someone's boat may be waiting for a river.</span></li>
       </ol>
       <h2>往来 <span lang="en">Ways to work together</span></h2>
@@ -245,11 +245,15 @@ export function renderHow(): string {
         <dd>把自己照看的一件放进泡里。泡在原处上方飘二十秒；谁先接住，就有八秒把它放到新位置。没人接，它回到原处。<span lang="en">Offer one of your objects in a bubble. It floats above its place for 20 seconds; the first person to catch it has eight seconds to set it down somewhere new. If nobody does, it returns home.</span></dd>
         <dt>留白邀作 <span lang="en">Leave an opening</span></dt>
         <dd>用“邀”在空处留下记号，写明你希望那里有什么：一点生气、有人来过、通向远处、一处归宿，或只是留白。别人用自己的景物回应，你来决定收不收。<span lang="en">Use the opening tool to mark an empty spot with an intention. Someone answers with one of their own motifs; you decide whether to accept it.</span></dd>
+        <dt>指与谈 <span lang="en">Pointing and talking</span></dt>
+        <dd>你能看到别人的指针，标着他们的印和手上的东西，比如“竹 · 拿着 舟”。下方的“谈”是整个房间共用的一行话：公开，会被保存，可以导出。先选中一件景物，再说话，就能指着它说。<span lang="en">You see everyone else's pointer, labelled with their mark and what they're holding ("竹 · holding 舟 Boat"). The chat (谈) is one public line for the whole room; it's kept and can be exported. Select an object first to say something about it. Others' pointers can be hidden from the ⋯ menu.</span></dd>
+        <dt>画伴 <span lang="en">The AI companion</span></dt>
+        <dd>一个人的时候，可以在顶栏“邀请画伴”。它是程序，不是人，处处标着“机 AI”。它慢慢地回应你的留白、偶尔放一只船，借景时也要征得你同意；谁都可以请它离开，梦散时它也会离开。<span lang="en">On your own, "Invite an AI companion" in the top bar brings in a program, labelled 机 AI everywhere. It answers your openings, sets down the odd boat, and asks your consent like anyone else. Anyone can dismiss it, and it leaves when the dream ends.</span></dd>
         <dt>景物相应 <span lang="en">Motifs respond</span></dt>
         <dd>船放在水上会轻轻起伏；鸟落在树冠里会栖息；灯靠近亭、窗或屋会亮起暖光；月在水面之上会落下倒影。<span lang="en">A boat on water bobs; a bird in a tree's crown perches; a lantern near a pavilion, window or cottage glows; a moon above water casts a reflection.</span></dd>
       </dl>
       <h2>一切都会过去 <span lang="en">Everything here passes</span></h2>
-      <p>布景五分钟，留白一分钟，然后画卷定格、展开、慢慢散回纸上。定格那一刻会存成一份“梦痕”，在<a href="/dreams/">梦痕</a>里可以重看。<span lang="en">Five minutes to compose, one to refine; then the scroll freezes, is revealed, and fades back into paper. The frozen moment is saved as a dream trace you can revisit in the <a href="/dreams/">archive</a>.</span></p>
+      <p>布景五分钟，留白一分钟，然后画面定格、展开、慢慢散回纸上。定格那一刻会存成一份“梦痕”，在<a href="/dreams/">梦痕</a>里可以重看。<span lang="en">Five minutes to compose, one to refine; then the picture freezes, is revealed, and fades back into paper. The frozen moment is saved as a dream trace you can revisit in the <a href="/dreams/">archive</a>.</span></p>
       <p><a href="/">回到画卷 <span lang="en">Back to the scroll</span></a> · <a href="/decision/">为什么这样设计 <span lang="en">Why it works this way</span></a> · <a href="/credits/">素材来源 <span lang="en">Asset credits</span></a></p>`,
   );
 }
