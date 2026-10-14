@@ -54,6 +54,7 @@ body.app:not(.motion) #world { animation: none; }
 }
 
 .bar {
+  z-index: 25;
   top: 0.5rem;
   left: 0.5rem;
   right: 0.5rem;
@@ -148,7 +149,7 @@ body.app:not(.motion) #world { animation: none; }
   box-shadow: 0 8px 26px rgb(41 43 41 / 14%);
 }
 .menu-body button, .menu-body a { justify-content: flex-start; text-align: left; width: 100%; }
-.menu-body button[aria-pressed="false"] { color: var(--ink-mid); text-decoration: line-through; }
+.menu-body button[aria-pressed="false"]:not(#fullscreen) { color: var(--ink-mid); text-decoration: line-through; }
 
 .rail {
   left: 0.5rem;

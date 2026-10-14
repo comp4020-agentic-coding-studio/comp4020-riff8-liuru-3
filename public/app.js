@@ -1826,7 +1826,12 @@ function openSide() {
   setSideOpen(true);
 }
 
+// On a narrow screen the two drawers share the same space: opening one
+// closes the other.
+const narrow = () => innerWidth <= 760 || innerHeight <= 500;
+
 function setSideOpen(open) {
+  if (open && narrow() && !$("chat").classList.contains("collapsed")) setChatOpen(false);
   $("side").classList.toggle("open", open);
   $("side-handle").setAttribute("aria-expanded", String(open));
   fitView();
@@ -2321,6 +2326,7 @@ $("chat-log").addEventListener("click", (ev) => {
 });
 
 function setChatOpen(open) {
+  if (open && narrow() && $("side").classList.contains("open")) setSideOpen(false);
   $("chat").classList.toggle("collapsed", !open);
   $("chat-toggle").setAttribute("aria-expanded", String(open));
   if (open) {
