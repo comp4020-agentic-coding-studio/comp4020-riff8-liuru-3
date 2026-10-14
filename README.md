@@ -147,7 +147,9 @@ Both are served at [/decision/](/decision/).
 There is one chat for the room, spanning rounds; each message records the
 dream it was sent in. It is plain text only (never HTML), up to 300
 characters, with control characters stripped and five messages per person in
-any 15 seconds. There are no images, no link previews and no moderation queue,
+any 15 seconds. Only a visitor the server already knows can post, and there
+are also caps per address (10 per 15 s) and for the whole room (40 per 15 s),
+so minting a new cookie for each message doesn't get round the limit. There are no images, no link previews and no moderation queue,
 so the chat says plainly that messages are public and kept. A message can
 point at one object in the picture. History survives reloads, reconnects and
 restarts; the page shows the most recent 50 and pages older ones in. Anyone
@@ -218,7 +220,8 @@ runs its TypeScript directly, and the browser loads plain ES modules.
 - `src/chat.ts` is the room's chat, with the same transaction, idempotency
   and event pattern.
 - `src/presence.ts` is the WebSocket for cursors and drag previews. It checks
-  the cookie and Origin on upgrade, caps messages at 512 bytes, rate-limits,
+  the cookie and Origin on upgrade, allows six tabs per person and 200
+  sockets in all, caps messages at 512 bytes, rate-limits,
   clamps every field, pings, batches at 20 Hz, and stores nothing.
 - `src/companion.ts` and `src/companion-model.ts` are the AI companion and its
   model.

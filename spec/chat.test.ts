@@ -10,7 +10,9 @@ describe("chat", () => {
   let b: Visitor;
 
   beforeAll(async () => {
-    server = await startServer({ COMPOSE_SECONDS: "2", REFINE_SECONDS: "1", REVEAL_SECONDS: "1", DISSOLVE_SECONDS: "1" });
+    // every test here comes from one address; the per-address and room-wide
+    // limits get their own server below
+    server = await startServer({ COMPOSE_SECONDS: "2", REFINE_SECONDS: "1", REVEAL_SECONDS: "1", DISSOLVE_SECONDS: "1", CHAT_PER_IP: "1000", CHAT_ROOM: "1000" });
     a = new Visitor(server.url);
     b = new Visitor(server.url);
     await begin(a);
@@ -154,4 +156,30 @@ describe("chat", () => {
     expect(html).toContain("&lt;img src=x onerror=alert(1)&gt;");
     expect(html).not.toContain("<img src=x");
   });
+});
+
+describe("chat flood limits", () => {
+  let server: TestServer;
+  beforeAll(async () => {
+    server = await startServer({ COMPOSE_SECONDS: "60" });
+  });
+  afterAll(() => server.stop());
+
+  it("can't be flooded by minting a new identity per message", async () => {
+    // no cookie at all: the server won't make a fresh chatter on the spot
+    const bare = await fetch(`${server.url}/api/chat`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ actionId: "spec-bare-1", text: "who am I" }),
+    });
+    expect(bare.status).toBe(403);
+    // many new visitors from one address share that address's allowance
+    const codes: number[] = [];
+    for (let i = 0; i < 14; i++) {
+      const v = new Visitor(server.url);
+      await v.state();
+      codes.push((await v.post("chat", { text: `drive-by ${i}` })).status);
+    }
+    expect(codes.filter((c) => c === 429).length).toBeGreaterThan(0);
+  }, 30_000);
 });

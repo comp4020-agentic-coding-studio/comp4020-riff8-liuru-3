@@ -141,6 +141,36 @@ describe("the AI companion", () => {
     }
   }, 40_000);
 
+  it("leaves nothing waiting on it when it goes", async () => {
+    const server = await startServer({ COMPOSE_SECONDS: "60", PROPOSAL_SECONDS: "30", ...FAST, COMPANION_CHECK_SECONDS: "20" });
+    try {
+      const a = new Visitor(server.url);
+      await begin(a);
+      await a.subscribe();
+      await a.post("place", { motif: "water", x: 900, y: 800, scale: 1.4 });
+      await a.post("companion/invite");
+      let theirs: any;
+      await waitUntil(async () => {
+        const s = await a.state();
+        theirs = s.objects.find((o: any) => o.custodian === s.companion?.pid && o.status === "placed");
+        return !!theirs;
+      }, 20_000);
+      // a request it hasn't answered yet (its check runs every 20 s here)
+      const pr = await a.post("borrow", { objectId: theirs.id, version: theirs.version, x: Math.max(10, theirs.x - 50), y: theirs.y });
+      expect(pr.status).toBe(200);
+      await a.post("companion/dismiss");
+      const s = await a.state();
+      expect(s.proposals.find((p: any) => p.id === pr.body.proposalId)).toBeUndefined();
+      expect(s.invitations.filter((i: any) => i.owner === theirs.custodian && i.status === "open")).toEqual([]);
+      expect(s.offers.filter((o: any) => o.offerer === theirs.custodian)).toEqual([]);
+      // its objects stay in the picture, as anyone's do
+      expect(s.objects.find((o: any) => o.id === theirs.id)).toBeTruthy();
+      a.unsubscribe();
+    } finally {
+      await server.stop();
+    }
+  }, 40_000);
+
   it("does nothing while nobody is connected, and never starts a round", async () => {
     const server = await startServer({ COMPOSE_SECONDS: "60", REFINE_SECONDS: "1", REVEAL_SECONDS: "1", DISSOLVE_SECONDS: "1", ...FAST });
     try {

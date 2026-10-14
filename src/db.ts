@@ -180,6 +180,8 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS objects_round ON objects(round_id, status);
   CREATE INDEX IF NOT EXISTS events_round ON events(round_id, id);
   CREATE INDEX IF NOT EXISTS chat_round ON chat_messages(round_id, id);
+  CREATE INDEX IF NOT EXISTS chat_by ON chat_messages(participant_id, created_at);
+  CREATE INDEX IF NOT EXISTS players_by ON round_players(participant_id, round_id);
   CREATE UNIQUE INDEX IF NOT EXISTS one_companion ON companions(round_id) WHERE status = 'present';
 `);
 

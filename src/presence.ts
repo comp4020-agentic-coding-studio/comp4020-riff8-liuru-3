@@ -13,6 +13,8 @@ const MAX_MESSAGE = 512; // bytes; a cursor is ~150
 const BATCH_MS = 50;
 const PING_MS = 15_000;
 const RATE = 30; // messages per second per socket, after a small burst
+const PER_PERSON = 6; // tabs open at once for one cookie
+const MAX_SOCKETS = Number(process.env.MAX_SOCKETS ?? 200);
 
 export type Activity = "hold" | "drag" | "borrow" | "dew" | "invite" | "receive" | "respond" | "";
 const ACTIVITIES = new Set<Activity>(["hold", "drag", "borrow", "dew", "invite", "receive", "respond", ""]);
@@ -135,6 +137,9 @@ export function attachPresence(server: Server, opts: PresenceOptions): { close()
     if (!req.headers.origin || !opts.sameOrigin(req)) return refuse(403, "Forbidden");
     const who = opts.identify(req);
     if (!who) return refuse(401, "Unauthorized");
+    let mine = 0;
+    for (const p of peers) if (p.pid === who.pid) mine++;
+    if (mine >= PER_PERSON || peers.size >= MAX_SOCKETS) return refuse(429, "Too Many Requests");
     wss.handleUpgrade(req, socket, head, (ws) => {
       const peer: Peer = { ws, pid: who.pid, alive: true, tokens: RATE, at: Date.now() };
       peers.add(peer);

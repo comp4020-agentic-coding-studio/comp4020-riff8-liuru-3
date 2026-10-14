@@ -1407,12 +1407,34 @@ function endCompanion(r: RoundRow, now: number, by: number | null): boolean {
     r.id,
     c.participant_id,
   );
+  // nobody is left to answer requests made to it, or openings it left
+  const toIt = db
+    .prepare("SELECT id FROM proposals WHERE round_id = ? AND target = ? AND status = 'pending'")
+    .all(r.id, c.participant_id) as { id: number }[];
+  db.prepare("UPDATE proposals SET status = 'declined' WHERE round_id = ? AND target = ? AND status = 'pending'").run(
+    r.id,
+    c.participant_id,
+  );
+  const openings = db
+    .prepare("SELECT id FROM invitations WHERE round_id = ? AND owner = ? AND status = 'open'")
+    .all(r.id, c.participant_id) as { id: number }[];
+  db.prepare("UPDATE invitations SET status = 'closed' WHERE round_id = ? AND owner = ? AND status = 'open'").run(
+    r.id,
+    c.participant_id,
+  );
   const held = db
     .prepare("SELECT * FROM offers WHERE round_id = ? AND claimant = ? AND status = 'claimed'")
     .all(r.id, c.participant_id) as OfferRow[];
   for (const o of held) returnOffer(o, "returned", now);
+  // and a bubble it offered floats home
+  const floating = db
+    .prepare("SELECT * FROM offers WHERE round_id = ? AND offerer = ? AND status = 'floating'")
+    .all(r.id, c.participant_id) as OfferRow[];
+  for (const o of floating) returnOffer(o, "cancelled", now);
   emit(r.id, "companion", { round: r.id, companion: null, left: pidOf(c.participant_id), by: by === null ? null : pidOf(by) }, now);
-  if (mine.length) patch(r.id, now, "proposal-cancelled", { proposals: mine.map((m) => m.id) });
+  if (mine.length || toIt.length || openings.length) {
+    patch(r.id, now, "companion-left", { proposals: [...mine, ...toIt].map((m) => m.id), invitations: openings.map((i) => i.id) });
+  }
   return true;
 }
 

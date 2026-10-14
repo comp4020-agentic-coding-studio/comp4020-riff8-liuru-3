@@ -89,6 +89,9 @@ function broadcastPresence(): void {
 // A small token bucket per participant: generous for real play, but enough
 // to stop one script hammering the shared scroll.
 const WRITES_PER_SECOND = Number(process.env.WRITES_PER_SECOND ?? 12);
+// chat messages per 15 s from one address, and from the whole room
+const CHAT_PER_IP = Number(process.env.CHAT_PER_IP ?? 10);
+const CHAT_ROOM = Number(process.env.CHAT_ROOM ?? 40);
 const buckets = new Map<string, { tokens: number; at: number }>();
 function allow(key: string, rate: number, burst: number): boolean {
   const now = Date.now();
@@ -233,11 +236,22 @@ const server = createServer(async (req, res) => {
       // Streamed a page at a time, with backpressure, so a long history
       // never has to fit in memory.
       const chunks = chat.exportChunks(format, roundId);
+      let gone = false;
+      res.on("close", () => {
+        gone = true;
+        chunks.return(undefined);
+      });
       const pump = () => {
-        for (;;) {
-          const next = chunks.next();
-          if (next.done) return res.end();
-          if (!res.write(next.value)) return res.once("drain", pump);
+        try {
+          for (;;) {
+            if (gone) return;
+            const next = chunks.next();
+            if (next.done) return res.end();
+            if (!res.write(next.value)) return res.once("drain", pump);
+          }
+        } catch (err) {
+          console.error(err);
+          res.destroy();
         }
       };
       pump();
@@ -288,6 +302,22 @@ const server = createServer(async (req, res) => {
       if (!sameOrigin(req)) {
         json(res, 403, { ok: false, code: "origin", message: "只接受本站的请求 / Same-site requests only." });
         return;
+      }
+      // Chat is the one place free text reaches everyone and stays. A new
+      // cookie per request mustn't mean a fresh allowance, so it needs a
+      // visitor the server already knows, and is also limited per address and
+      // for the room as a whole.
+      if (url.pathname === "/api/chat") {
+        const known = game.existingParticipant(token);
+        if (!known) {
+          json(res, 403, { ok: false, code: "visitor", message: "请先打开画面 / Open the picture first." }, cookieHeader);
+          return;
+        }
+        const ip = String(req.headers["fly-client-ip"] ?? req.socket.remoteAddress ?? "");
+        if (!allow(`chat-ip:${ip}`, CHAT_PER_IP / 15, CHAT_PER_IP) || !allow("chat-room", CHAT_ROOM / 15, CHAT_ROOM)) {
+          json(res, 429, { ok: false, code: "chat-slow", message: "说得太快了，歇一会儿 / That's a lot of messages: wait a few seconds." }, cookieHeader);
+          return;
+        }
       }
       const p = game.participantFor(token);
       const raw = await readBody(req);

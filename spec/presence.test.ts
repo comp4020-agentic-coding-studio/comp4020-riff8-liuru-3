@@ -68,6 +68,15 @@ describe("presence socket", () => {
     sb.ws.close();
   });
 
+  it("caps how many sockets one person can hold open", async () => {
+    const open = [];
+    for (let i = 0; i < 6; i++) open.push(await openSocket(a));
+    await expect(openSocket(a)).rejects.toThrow(/refused 429/);
+    // someone else isn't affected
+    const other = await openSocket(b);
+    for (const s of [...open, other]) s.ws.close();
+  });
+
   it("removes a cursor for everyone when its owner disconnects", async () => {
     const sa = await openSocket(a);
     const sb = await openSocket(b);

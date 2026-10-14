@@ -383,7 +383,17 @@ function scheduleAct() {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms).unref());
 
+// Whatever goes wrong inside the companion stays inside it: it logs, skips the
+// turn, and the room carries on. It must never take the server down.
 async function turn() {
+  try {
+    await turnInner();
+  } catch (err) {
+    log(`turn failed: ${(err as Error).stack ?? err}`);
+  }
+}
+
+async function turnInner() {
   const here = game.companionNow();
   if (!here || humans() === 0) return stop();
   if (busy) return scheduleAct();
@@ -423,11 +433,21 @@ async function setDown(agent: game.Participant) {
   });
   const best = sample(spots, WEIGHTS.temperature)!;
   await glide({ pid: s.me, ...best.t, act: "receive", motif: obj.motif }, Math.min(COMPANION_TIMING.glide, game.TIMING.lease / 4));
+  // the room may have emptied during the glide; an unplaced bubble just goes home
+  if (!game.companionNow() || humans() === 0) return;
   commit(agent, { kind: "receive", label: `放下 set down ${obj.motif}`, score: 0, at: best.t, run: (p, id) => game.placeClaimed(p, { actionId: id, offerId: held.id, ...best.t }) });
 }
 
 /** Requests aimed at the companion: answer each well before it expires. */
 function check() {
+  try {
+    checkInner();
+  } catch (err) {
+    log(`check failed: ${(err as Error).stack ?? err}`);
+  }
+}
+
+function checkInner() {
   const here = game.companionNow();
   if (!here || humans() === 0) return stop();
   const agent = here.participant;
@@ -444,6 +464,16 @@ function check() {
     serverCursor({ pid: s.me, x: Math.round(pr.transform.x), y: Math.round(pr.transform.y), act: "" }, agent.pid);
     cursorShown = true;
     cursorAt = { x: pr.transform.x, y: pr.transform.y };
+    // A borrow made against an older version of its object is stale. Accepting
+    // it refuses *and records* the stale mark, which a dry run would roll back,
+    // so it's answered for real; the proposer hears at once instead of waiting
+    // out the expiry.
+    const o = pr.kind === "borrow" ? s.objects.find((x) => x.id === pr.objectId) : undefined;
+    if (accept && o && o.version !== pr.objectVersion) {
+      game.accept(agent, { actionId: actionId("accept"), proposalId: pr.id });
+      stats.answered++;
+      continue;
+    }
     if (commit(agent, { kind, label: `${accept ? "接受" : "婉拒"} ${kind} a ${pr.kind}`, score: 0, at: pr.transform, run })) stats.answered++;
   }
   if (Date.now() - lastAct > 12_000) hideCursor(agent.pid);
@@ -462,8 +492,7 @@ function stop() {
   clearInterval(checkTimer);
   actTimer = undefined;
   checkTimer = undefined;
-  const pid = game.agentParticipant().pid;
-  hideCursor(pid);
+  if (cursorShown) hideCursor(game.agentParticipant().pid);
 }
 
 /**

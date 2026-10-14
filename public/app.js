@@ -1333,7 +1333,7 @@ async function catchBubble(offerId) {
 function beginBorrow(o) {
   setSideOpen(false);
   UI.mode = "borrow";
-  UI.ghost = { motif: o.motif, x: Math.min(SCENE.width, o.x + 80), y: o.y, scale: o.scale, rotation: o.rotation, flip: o.flip };
+  UI.ghost = { motif: o.motif, ...clampScene({ x: o.x + 80, y: o.y }), scale: o.scale, rotation: o.rotation, flip: o.flip };
   for (const m of MODES) document.body.classList.toggle(`mode-${m}`, UI.mode === m);
   sendPreview();
   renderModebar();

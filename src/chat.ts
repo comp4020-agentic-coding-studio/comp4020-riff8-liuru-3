@@ -207,7 +207,7 @@ export function* exportChunks(format: "md" | "txt" | "json", roundId?: number): 
         const about = m.object_motif ? ` (about the ${m.object_motif} #${m.object_id})` : "";
         out +=
           format === "md"
-            ? `- ${iso(m.created_at)} **${who(m)}**: ${m.body.replace(/([\\`*_[\]<>#])/g, "\\$1")}${about}\n`
+            ? `- ${iso(m.created_at)} **${who(m)}**: ${m.body.replace(/([\\`*_[\]<>#~|]|:\/\/)/g, "\\$1")}${about}\n`
             : `[${iso(m.created_at)}] ${who(m)}: ${m.body}${about}\n`;
       }
       first = false;
