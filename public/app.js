@@ -225,6 +225,8 @@ function onChange(e) {
     return;
   }
   if (e.id <= S.cursor) return; // already have it
+  // everyone is told when the companion arrives or leaves, and by whose hand
+  if (e.type === "companion" && e.id > S.cursor) announceCompanion(e.payload);
   if (e.id !== S.cursor + 1 || e.type === "round-started" || e.type === "phase" || e.type === "companion") {
     // a gap (or a round boundary): take a fresh, consistent snapshot
     resync();
@@ -303,6 +305,18 @@ function applyPatch(type, p) {
   }
   if (UI.selected && !S.objects.has(UI.selected)) UI.selected = null;
   renderAll();
+}
+
+function announceCompanion(p) {
+  const who = (pid) => (pid === S.me ? "你 you" : markOf(pid).glyph);
+  if (p.companion) {
+    if (p.by === S.me) return; // the inviter already has their own note
+    toast(`${who(p.by)} 请来了画伴 ${AGENT.glyph} AI <span lang="en">invited the AI companion. It's a program, not a person; anyone can dismiss it.</span>`);
+  } else if (p.by) {
+    toast(`${who(p.by)} 请画伴离开了 <span lang="en">dismissed the AI companion.</span>`);
+  } else {
+    say("画伴随梦离开 The AI companion left with the dream.");
+  }
 }
 
 function proposalOutcome(pr) {
