@@ -2,8 +2,10 @@ node_modules/
 dist/
 *.log
 
-# local SQLite data (DATA_DIR default); the real data lives on the Fly volume
-data/
+# local SQLite data (DATA_DIR default); the real data lives on the Fly volume.
+# Anchored: unanchored `data/` also swallowed scripts/data, the committed
+# dream-trace dataset the spec and the companion's weights are built from.
+/data/
 
 # editor and OS junk
 .DS_Store

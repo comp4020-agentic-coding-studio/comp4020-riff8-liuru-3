@@ -3,8 +3,10 @@
 //   node scripts/train-companion.ts
 //
 // Data: scripts/data/archives.json, the final scenes of the 16 public dream
-// traces on the live app (fetched read-only from /dreams/<id>/ on
-// 2026-10-14): 97 motifs that real people chose to put where they put them.
+// traces on the live app (fetched read-only from /dreams/<id>/ on 2026-10-14
+// by scripts/fetch-archives.ts, and committed, so this fit and the spec don't
+// need the network): 97 motifs that real people chose to put where they put
+// them.
 // For each placed object, the "choice" is where it actually sits, against 24
 // random alternative spots for the same motif in the same scene (with that
 // object removed). A conditional-logit model (softmax over the 25 options,

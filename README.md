@@ -262,7 +262,11 @@ pnpm start                       # http://localhost:8080
 APP_URL=http://localhost:8080 pnpm check
 pnpm check:evidence
 node scripts/train-companion.ts  # refit the companion's weights
+node scripts/fetch-archives.ts   # refetch the dream traces it is fitted to
 ```
+
+`scripts/data/archives.json` (the 16 public dream traces) is committed: the
+fit and `spec/layout.test.ts` read it from the repo, never over the network.
 
 `pnpm check` typechecks and runs `spec/`. `invariants.test.ts` and
 `site.test.ts` read the app at `APP_URL` without writing to it. The other
